@@ -18,7 +18,7 @@ export default async function FrontendLayout({ children }: { children: ReactNode
           appKey: settings.soketiAppKey ?? 'app-key',
           wsHost: settings.soketiHost ?? 'localhost',
           wsPort: settings.soketiPort ?? 6001,
-          forceTLS: false, // Set based on your Soketi deployment
+          forceTLS: true, // Set based on your Soketi deployment
           disableStats: true,
           enabledTransports: ['ws', 'wss'],
         }
@@ -31,9 +31,7 @@ export default async function FrontendLayout({ children }: { children: ReactNode
     <html lang="en">
       <body>
         {/* The provider now configures itself dynamically based on your Admin Panel settings */}
-        <NotificationProvider config={clientConfig}>
-          {children}
-        </NotificationProvider>
+        <NotificationProvider config={clientConfig}>{children}</NotificationProvider>
       </body>
     </html>
   )
