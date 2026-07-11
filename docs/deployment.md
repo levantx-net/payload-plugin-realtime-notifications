@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This document describes how to package, publish, and deploy the `payload-plugin-realtime-notifications` plugin, as well as how to set up self-hosted environments (Sockudo + Apprise) or connect to the managed SaaS infrastructure.
+This document describes how to package, publish, and deploy the `payload-plugin-realtime-notifications` plugin, as well as how to set up self-hosted environments (Soketi + Apprise) or connect to the managed SaaS infrastructure.
 
 ---
 
@@ -53,9 +53,9 @@ Once deployed, the administrator opens the **Notification Settings** page in the
 
 ---
 
-## 3. Deploying Self-Hosted Mode (Sockudo & Apprise)
+## 3. Deploying Self-Hosted Mode (Soketi & Apprise)
 
-For fully private self-hosted notifications, you need to spin up a Sockudo instance (WebSockets gateway) and an Apprise container (multichannel notification router).
+For fully private self-hosted notifications, you need to spin up a Soketi instance (WebSockets gateway) and an Apprise container (multichannel notification router).
 
 ### Docker Compose Example Setup
 
@@ -65,17 +65,21 @@ Create a `docker-compose.yml` file to host the self-hosted services alongside yo
 version: '3.8'
 
 services:
-  # Sockudo: WebSocket server speaking the Pusher protocol
-  sockudo:
-    image: sockudo/sockudo:latest
+  # Soketi: Pusher-compatible WebSocket server
+  soketi:
+    image: quay.io/soketi/soketi:1.6.1-16-debian
     ports:
-      - "8080:8080"
+      - "6001:6001"
+      - "9601:9601"
     environment:
-      - SOCKUDO_APP_ID=notification-app
-      - SOCKUDO_APP_KEY=self_hosted_key_123
-      - SOCKUDO_APP_SECRET=self_hosted_secret_abc
-      - SOCKUDO_PORT=8080
-    restart: always
+      - SOKETI_DEBUG=1
+      - SOKETI_HOST=0.0.0.0
+      - SOKETI_PORT=6001
+      - SOKETI_METRICS_SERVER_PORT=9601
+      - SOKETI_DEFAULT_APP_ID=app-id
+      - SOKETI_DEFAULT_APP_KEY=app-key
+      - SOKETI_DEFAULT_APP_SECRET=app-secret
+    restart: unless-stopped
 
   # Apprise: Handles physical notifications (Email, Discord, Slack, SMS)
   apprise:
@@ -91,46 +95,51 @@ Once the services are deployed:
 1. Log in to the Payload Admin panel.
 2. Navigate to **Notification Settings**.
 3. Select **Self-Hosted** under *Delivery Mode*.
-4. Input the configured connection URLs:
-   - **Sockudo WebSocket URL:** `http://localhost:8080` (or your public domain, e.g. `https://ws.mycms.com`)
-   - **Apprise Notification URL:** `http://localhost:8000` (or your public domain)
+4. Input the configured connection details:
+   - **Soketi WebSocket Host:** The domain/IP where Soketi is listening (e.g. `localhost` or `ws.mycms.com`).
+   - **Soketi Port:** `6001`
+   - **Soketi App ID:** `app-id` (matches SOKETI_DEFAULT_APP_ID).
+   - **Soketi App Key:** `app-key` (matches SOKETI_DEFAULT_APP_KEY).
+   - **Soketi App Secret:** `app-secret` (matches SOKETI_DEFAULT_APP_SECRET).
+   - **Apprise Base URL:** `http://localhost:8000` (or your public domain).
+   - **Apprise Config Key:** `apprise` (or the stateful config key defined on your Apprise server).
+   - **Apprise Bearer Token:** Optional API token if your Apprise instance is secured.
+   - **Apprise Tags:** Optional comma-separated list of services (e.g. `slack,email`) to target.
 
 ---
 
 ## 4. Frontend Client Environment Configurations
 
-Your frontend application (e.g., Next.js client, Mobile React Native bundle) needs the app key to listen to WebSocket channels. 
+Your frontend application (e.g., Next.js client, Mobile React Native bundle) needs the app key to listen to WebSocket channels. By using Server Components in Next.js, you can fetch this config dynamically on the server side (avoiding static client environment variables).
 
-### Environment Configuration (.env.local)
+### Dynamic Client Initialization (Next.js Layout Example)
 
-```env
-# The WebSocket application key (Managed Tenant API key or Sockudo App Key)
-NEXT_PUBLIC_NOTIFICATION_APP_KEY=self_hosted_key_123
-
-# Required ONLY for Self-Hosted connections:
-NEXT_PUBLIC_NOTIFICATION_WS_HOST=ws.mycms.com
-```
-
-### Next.js Client Hook Initialization
+Fetch configuration dynamically from the CMS database to avoid leaking credentials:
 
 ```tsx
+import { getPayload } from 'payload'
+import configPromise from '@payload-config'
 import { NotificationProvider } from 'payload-plugin-realtime-notifications/react'
 
-export function AppWrapper({ children }) {
-  const isSelfHosted = !!process.env.NEXT_PUBLIC_NOTIFICATION_WS_HOST
+export default async function AppWrapper({ children }) {
+  const payload = await getPayload({ config: configPromise })
+  const settings = await payload.findGlobal({ slug: 'notification-settings' })
+
+  const clientConfig = settings.mode === 'self-hosted'
+    ? {
+        appKey: settings.soketiAppKey || 'app-key',
+        wsHost: settings.soketiHost || 'localhost',
+        wsPort: settings.soketiPort || 6001,
+        forceTLS: false,
+        disableStats: true,
+      }
+    : {
+        appKey: settings.saasApiKey || 'saas-key',
+        cluster: 'mt1',
+      }
 
   return (
-    <NotificationProvider
-      config={{
-        appKey: process.env.NEXT_PUBLIC_NOTIFICATION_APP_KEY!,
-        ...(isSelfHosted ? {
-          wsHost: process.env.NEXT_PUBLIC_NOTIFICATION_WS_HOST,
-          forceTLS: true,
-        } : {
-          cluster: 'eu', // Or SaaS cluster
-        })
-      }}
-    >
+    <NotificationProvider config={clientConfig}>
       {children}
     </NotificationProvider>
   )

@@ -8,7 +8,7 @@ This document details the code architecture of the `payload-plugin-realtime-noti
 
 The plugin is designed to operate on two primary boundaries:
 1. **The Server Boundary (Payload CMS):** Processes content edits, determines if events should dispatch, and pushes payloads asynchronously to either a SaaS Gateway proxy or self-hosted systems.
-2. **The Client Boundary (Consumer App):** Listens to events using a WebSocket client connected directly to the WebSocket host (either Sockudo or the SaaS endpoint).
+2. **The Client Boundary (Consumer App):** Listens to events using a WebSocket client connected directly to the WebSocket host (either Soketi or the SaaS endpoint).
 
 ### System Topology Diagram
 
@@ -22,7 +22,7 @@ graph LR
 
     subgraph Gateway ["Delivery Infrastructure"]
         D -->|"HTTPS"| E["SaaS Gateway Proxy / Apprise"]
-        E -->|"Internal Dispatch"| F["Sockudo / WebSocket Server"]
+        E -->|"Internal Dispatch"| F["Soketi / WebSocket Server"]
     end
 
     subgraph Client ["Consumer App (Frontend)"]

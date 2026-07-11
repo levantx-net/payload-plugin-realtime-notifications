@@ -81,10 +81,17 @@ export interface NotificationSettingsData {
   tenantId?: string
 
   /** Base URL of the user's self-hosted Sockudo WebSocket server. */
-  sockudoUrl?: string
+  soketiHost?: string
+  soketiPort?: number
+  soketiAppId?: string
+  soketiAppKey?: string
+  soketiAppSecret?: string
 
   /** Base URL of the user's self-hosted Apprise notification server. */
   appriseUrl?: string
+  appriseConfigKey?: string
+  appriseBearerToken?: string
+  appriseTags?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -135,11 +142,12 @@ export interface NotificationEvent {
  * @internal
  */
 export interface DispatchTarget {
-  /** Fully-qualified URL to POST the event to. */
+  /** The fully-qualified HTTP endpoint. */
   url: string
-
-  /** HTTP headers (e.g. `Authorization: Bearer <key>`). */
+  /** Necessary authentication headers. */
   headers: Record<string, string>
+  /** The pre-formatted JSON payload for this specific target. */
+  body: string
 }
 
 // ---------------------------------------------------------------------------

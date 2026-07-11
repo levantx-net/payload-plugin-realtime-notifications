@@ -11,7 +11,7 @@ A stateless, production-ready, zero-blocking real-time notification publisher pl
 
 - **Stateless Architecture:** Event publisher model. It doesn't manage connection sockets directly on the CMS, maintaining Payload server performance.
 - **Zero-Blocking Hooks:** All database hooks run asynchronously and are safely wrapped in try-catch handlers. Slow network responses from SaaS or self-hosted systems will *never* block Payload save/update operations.
-- **Managed & Self-Hosted Modes:** Connect directly to a managed SaaS platform via OAuth, or point to your own Sockudo (WebSocket) and Apprise instances.
+- **Managed & Self-Hosted Modes:** Connect directly to a managed SaaS platform via OAuth, or point to your own Soketi (WebSocket) and Apprise instances.
 - **Fully Generic Hook Configuration:** Opt-in database collections with granular control over events, conditions, data transforms, and event naming.
 - **Next.js & React Frontend Integration:** A dedicated decoupled client path (`/react`) with standard React hooks to subscribe and listen to notification feeds from your frontend apps.
 - **Graceful Degradation:** Real-time connection status is fully observable on the client to allow seamless polling fallbacks (SWR/React Query) when offline.
@@ -113,19 +113,9 @@ export const InvoicesCollection = {
 
 Upon registering the plugin, a new Global option titled **Notification Settings** appears in the sidebar under the `Plugins` group. 
 
-Overriding the default Global view, this plugin provides a custom dashboard:
-
-1. **Disconnected (Pricing Grid & Connection):**
-   When first visiting the view, you are presented with SaaS marketing pricing cards and a **Connect & Subscribe** button.
-2. **The OAuth Handshake:**
-   - Clicking **Connect & Subscribe** redirects you to the SaaS Portal to authorize your account and select a subscription plan.
-   - On completion, the gateway redirects back to your Payload admin dashboard passing temporary credentials.
-   - The React UI reads these parameters, posts them securely to the database using Payload REST API, and instantly purges the keys from the URL address bar using `window.history.replaceState` for security.
-3. **Connected (Usage & Billing):**
-   Once connected, the screen switches to render:
-   - Live monthly usage status (WebSocket counters and push notifications vs. current plan limits).
-   - A **Manage Billing** button redirecting the user to Stripe's Customer Portal.
-   - A **Disconnect Account** button to cleanly tear down authentication.
+Depending on the mode selected, developers can configure:
+- **Managed (SaaS):** Integrates via a secure OAuth connection redirecting to the SaaS web portal for billing selection (Free, Starter, or Growth tiers).
+- **Self-Hosted:** Fully configure Soketi credentials (Host, Port, App ID, App Key, App Secret) and Apprise configurations (Base URL, Config Key, Bearer Token, and Tags) directly within the admin panel.
 
 ---
 
@@ -135,21 +125,39 @@ You can subscribe to and process live updates inside your web apps by importing 
 
 ### 1. Wrap Your App in the Provider
 
+For Next.js App Router applications, you can fetch the configuration dynamically on the server side using the Payload Local API to prevent leaking private secrets to the client:
+
 ```tsx
+import { getPayload } from 'payload'
+import configPromise from '@payload-config'
 import { NotificationProvider } from 'payload-plugin-realtime-notifications/react'
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Fetch the configuration dynamically from the database
+  const payload = await getPayload({ config: configPromise })
+  const settings = await payload.findGlobal({ slug: 'notification-settings' })
+
+  const clientConfig = settings.mode === 'self-hosted' 
+    ? {
+        appKey: settings.soketiAppKey || 'app-key',
+        wsHost: settings.soketiHost || 'localhost',
+        wsPort: settings.soketiPort || 6001,
+        forceTLS: false,
+        disableStats: true,
+      } 
+    : {
+        appKey: settings.saasApiKey || 'saas-key',
+        cluster: 'mt1',
+      }
+
   return (
-    <NotificationProvider
-      config={{
-        appKey: process.env.NEXT_PUBLIC_SAAS_API_KEY || 'your-app-key',
-        // Optional parameters for self-hosted Sockudo configurations:
-        // wsHost: 'ws.example.com',
-        // forceTLS: true,
-      }}
-    >
-      {children}
-    </NotificationProvider>
+    <html lang="en">
+      <body>
+        <NotificationProvider config={clientConfig}>
+          {children}
+        </NotificationProvider>
+      </body>
+    </html>
   )
 }
 ```

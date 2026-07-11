@@ -95,21 +95,85 @@ export const NotificationSettings: GlobalConfig = {
 
     // ---- Self-Hosted Fields (visible when mode = 'self-hosted') ----
     {
-      name: 'sockudoUrl',
+      name: 'soketiHost',
       type: 'text',
-      label: 'Sockudo WebSocket URL',
+      label: 'Soketi WebSocket Host',
       admin: {
         condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
-        description: 'Base URL of your Sockudo instance (e.g. https://ws.example.com).',
+        description: 'The public domain or IP of your Soketi instance (e.g., asaas-soketi-xxx.sslip.io).',
+      },
+    },
+    {
+      name: 'soketiPort',
+      type: 'number',
+      label: 'Soketi Port',
+      defaultValue: 6001,
+      admin: {
+        condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
+      },
+    },
+    {
+      name: 'soketiAppId',
+      type: 'text',
+      label: 'Soketi App ID',
+      admin: {
+        condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
+        description: 'Usually "app-id" by default unless changed in Soketi env vars.',
+      },
+    },
+    {
+      name: 'soketiAppKey',
+      type: 'text',
+      label: 'Soketi App Key',
+      admin: {
+        condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
+        description: 'The public key used by your frontend React app (e.g., "app-key").',
+      },
+    },
+    {
+      name: 'soketiAppSecret',
+      type: 'text',
+      label: 'Soketi App Secret',
+      admin: {
+        condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
+        description: 'The private secret used by the CMS backend to authenticate dispatches. Keep this safe!',
       },
     },
     {
       name: 'appriseUrl',
       type: 'text',
-      label: 'Apprise Notification URL',
+      label: 'Apprise Base URL',
       admin: {
         condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
-        description: 'Base URL of your Apprise instance (e.g. https://apprise.example.com).',
+        description: 'Base URL of your Apprise server (e.g. https://apprise.example.com).',
+      },
+    },
+    {
+      name: 'appriseConfigKey',
+      type: 'text',
+      label: 'Apprise Config Key',
+      defaultValue: 'apprise',
+      admin: {
+        condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
+        description: 'The configuration key/ID configured on your Apprise server (used in /notify/{key}).',
+      },
+    },
+    {
+      name: 'appriseBearerToken',
+      type: 'text',
+      label: 'Apprise Bearer Token',
+      admin: {
+        condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
+        description: 'Optional. The Authorization Bearer token if your Apprise instance is secured.',
+      },
+    },
+    {
+      name: 'appriseTags',
+      type: 'text',
+      label: 'Apprise Tags',
+      admin: {
+        condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
+        description: 'Optional. Comma-separated list of tags to filter which services receive the notification.',
       },
     },
   ],

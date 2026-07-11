@@ -19,34 +19,71 @@ const DEFAULT_SAAS_GATEWAY_URL = 'https://api.yoursaas.com/v1'
  *
  * @internal
  */
-export function resolveTarget(
+export function resolveTargets(
   settings: NotificationSettingsData,
+  event: NotificationEvent,
   gatewayOverride?: string,
-): DispatchTarget | null {
+): DispatchTarget[] {
+  const targets: DispatchTarget[] = []
+
   if (settings.mode === 'saas') {
-    if (!settings.saasApiKey) return null
-
-    const baseUrl = gatewayOverride ?? DEFAULT_SAAS_GATEWAY_URL
-
-    return {
-      url: `${baseUrl.replace(/\/+$/, '')}/dispatch`,
-      headers: {
-        Authorization: `Bearer ${settings.saasApiKey}`,
-        'Content-Type': 'application/json',
-      },
+    if (settings.saasApiKey) {
+      const baseUrl = gatewayOverride ?? DEFAULT_SAAS_GATEWAY_URL
+      targets.push({
+        url: `${baseUrl.replace(/\/+$/, '')}/dispatch`,
+        headers: {
+          Authorization: `Bearer ${settings.saasApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        // SaaS Gateway expects the raw event payload
+        body: JSON.stringify(event),
+      })
     }
+    return targets
   }
 
-  // self-hosted — prefer sockudoUrl, fall back to appriseUrl
-  const url = settings.sockudoUrl ?? settings.appriseUrl
-  if (!url) return null
-
-  return {
-    url: url.replace(/\/+$/, ''),
-    headers: {
-      'Content-Type': 'application/json',
-    },
+  // ---- Self-Hosted: Soketi/Sockudo ----
+  if (settings.soketiHost) {
+    // Note: To fully support Soketi REST API from the CMS without a proxy,
+    // this target requires Pusher HMAC-SHA256 signing. 
+    // For now, we dispatch to the raw host as a placeholder.
+    const protocol = settings.soketiHost.startsWith('http') ? '' : 'http://'
+    const port = settings.soketiPort ? `:${settings.soketiPort}` : ''
+    targets.push({
+      url: `${protocol}${settings.soketiHost}${port}`,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(event),
+    })
   }
+
+  // ---- Self-Hosted: Apprise ----
+  if (settings.appriseUrl) {
+    const baseUrl = settings.appriseUrl.replace(/\/+$/, '')
+    const configKey = settings.appriseConfigKey || 'apprise'
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    
+    if (settings.appriseBearerToken) {
+      headers['Authorization'] = `Bearer ${settings.appriseBearerToken}`
+    }
+
+    // Apprise expects a specific JSON shape for push notifications
+    const appriseBody: Record<string, any> = {
+      title: event.event,
+      body: JSON.stringify(event.payload),
+    }
+
+    if (settings.appriseTags) {
+      appriseBody.tags = settings.appriseTags
+    }
+
+    targets.push({
+      url: `${baseUrl}/notify/${configKey}`,
+      headers,
+      body: JSON.stringify(appriseBody),
+    })
+  }
+
+  return targets
 }
 
 // ---------------------------------------------------------------------------
@@ -89,27 +126,26 @@ export function dispatchEvent(
         // ── Zero-blocking gate ──────────────────────────────
         if (!settings.enabled) return
 
-        const target = resolveTarget(settings, options?.saasGatewayUrl)
-        if (!target) return
+        const targets = resolveTargets(settings, eventWithTimestamp, options?.saasGatewayUrl)
+        if (targets.length === 0) return
 
-        // ── Fire-and-forget fetch ───────────────────────────
-        // The void + .catch ensures no unhandled rejection.
-        void fetch(target.url, {
-          method: 'POST',
-          headers: target.headers,
-          body: JSON.stringify(eventWithTimestamp),
-        }).catch((fetchError: unknown) => {
-          // Network failure — swallow silently in production.
-          // In development, log a single-line warning so devs
-          // know notifications aren't reaching the target.
-          if (process.env.NODE_ENV === 'development') {
-            // eslint-disable-next-line no-console
-            console.warn(
-              `[notifications] dispatch failed for "${eventWithTimestamp.event}":`,
-              fetchError instanceof Error ? fetchError.message : fetchError,
-            )
-          }
-        })
+        // ── Fire-and-forget fetches ───────────────────────────
+        for (const target of targets) {
+          void fetch(target.url, {
+            method: 'POST',
+            headers: target.headers,
+            body: target.body,
+          }).catch((fetchError: unknown) => {
+            // Network failure — swallow silently in production.
+            if (process.env.NODE_ENV === 'development') {
+              // eslint-disable-next-line no-console
+              console.warn(
+                `[notifications] dispatch failed for target ${target.url}:`,
+                fetchError instanceof Error ? fetchError.message : fetchError,
+              )
+            }
+          })
+        }
       })
       .catch((settingsError: unknown) => {
         // Global read failure (e.g. DB not ready, plugin disabled).

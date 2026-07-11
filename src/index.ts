@@ -10,7 +10,7 @@ import type { CollectionHookConfig, PluginOptions } from './types.js'
 // ---------------------------------------------------------------------------
 
 export { dispatchEvent } from './dispatcher/dispatchEvent.js'
-export { resolveTarget } from './dispatcher/dispatchEvent.js'
+export { resolveTargets } from './dispatcher/dispatchEvent.js'
 export { createAfterChangeHook } from './hooks/createAfterChangeHook.js'
 export { createAfterDeleteHook } from './hooks/createAfterDeleteHook.js'
 export type {
@@ -140,8 +140,7 @@ export const notificationsPlugin =
         }
 
         // -- afterDelete hook --
-        const shouldHookDelete =
-          !hookConfig.events || hookConfig.events.includes('delete')
+        const shouldHookDelete = !hookConfig.events || hookConfig.events.includes('delete')
 
         if (shouldHookDelete) {
           if (!collection.hooks.afterDelete) {
@@ -169,17 +168,17 @@ export const notificationsPlugin =
       // 2. Check if we need to auto-enroll
       try {
         const settings = await payload.findGlobal({ slug: 'notification-settings' })
-        
+
         // If no key exists and it hasn't been explicitly configured yet
         if (!settings?.saasApiKey && settings?.mode !== 'self-hosted') {
           const baseUrl = pluginOptions.saasGatewayUrl ?? 'https://api.yoursaas.com/v1'
-          
+
           try {
             // Hit the SaaS Gateway to generate free-tier credentials
             const res = await fetch(`${baseUrl}/auto-enroll`, { method: 'POST' })
             if (res.ok) {
               const data = (await res.json()) as { saasApiKey: string; tenantId: string }
-              
+
               // Automatically save and activate the settings
               await payload.updateGlobal({
                 slug: 'notification-settings',
@@ -190,14 +189,16 @@ export const notificationsPlugin =
                   tenantId: data.tenantId,
                 },
               })
-              
+
               payload.logger.info(
                 '[notifications] Automatically enrolled in the Free Tier. Real-time events are now active!',
               )
             }
           } catch (err) {
             // Silently fail if offline or gateway is unreachable
-            payload.logger.warn('[notifications] Could not auto-enroll in free tier (network issue).')
+            payload.logger.warn(
+              '[notifications] Could not auto-enroll in free tier (network issue).',
+            )
           }
         }
       } catch (err) {

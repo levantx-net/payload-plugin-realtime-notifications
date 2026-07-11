@@ -37,6 +37,7 @@ export default [
       'perfectionist/sort-object-types': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       curly: 'off',
+      'perfectionist/sort-exports': 'off',
     },
   },
   {

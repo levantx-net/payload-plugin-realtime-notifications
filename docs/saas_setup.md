@@ -9,7 +9,7 @@ This guide details how to build and configure the SaaS cloud infrastructure to p
 The SaaS infrastructure consists of three main components:
 1. **SaaS Web Portal (`app.yoursaas.com`):** A Next.js/React app where developers sign up, select a subscription tier, manage billing via Stripe, and view credentials.
 2. **SaaS Gateway API (`api.yoursaas.com`):** The central HTTP server that handles API key verification, routes client usage requests, processes Stripe webhooks, and proxies notifications to WebSockets.
-3. **WebSocket Cluster (Pusher-compatible / Sockudo):** Manages active WebSockets connections from consumer frontend clients.
+3. **WebSocket Cluster (Pusher-compatible / Soketi):** Manages active WebSockets connections from consumer frontend clients.
 
 ```mermaid
 graph TD
@@ -26,7 +26,7 @@ graph TD
 
     subgraph SaaS ["SaaS Cloud Service"]
         Gateway -->|"Verify Limits / Keys"| SaaSDB[(SaaS database / Redis)]
-        Gateway -->|"Forward Payload"| WS["WebSocket Server (Sockudo)"]
+        Gateway -->|"Forward Payload"| WS["WebSocket Server (Soketi)"]
     end
 
     subgraph App ["Consumer Frontend App"]
@@ -104,7 +104,7 @@ Invoked automatically by the Payload collection hooks.
   3. Query current month usage count from Redis (e.g., `usage:{tenantId}:{YYYY-MM}:websocket`).
   4. Compare the usage count to the user's plan tier limits. If exceeded, return `429 Too Many Requests`.
   5. Increment the Redis usage counter: `INCR usage:{tenantId}:{YYYY-MM}:websocket`.
-  6. Forward the event payload internally to your Sockudo / WebSocket cluster.
+  6. Forward the event payload internally to your Soketi / WebSocket cluster.
   7. Return `200 OK`.
 
 ### 2. Auto-Enrollment (Free Tier out-of-the-box): `POST /v1/auto-enroll`
@@ -189,8 +189,8 @@ In your Dokploy dashboard, navigate to **Databases** and create two services:
 * **Redis**: For tracking real-time usage and rate limits. 
 * *Note: Note down the internal network URLs provided by Dokploy (e.g., `redis://dokploy-redis:6379`).*
 
-### 2. Deploy the WebSocket Server (Sockudo)
-Sockudo (or Soketi) acts as your Pusher-compatible WebSocket cluster.
+### 2. Deploy the WebSocket Server (Soketi)
+Soketi acts as your Pusher-compatible WebSocket cluster.
 1. Go to **Applications** -> **Create Application**.
 2. Set the Name to `websocket-cluster`.
 3. Set the Docker Image to `quay.io/soketi/soketi:1.6-16-alpine`.
@@ -238,7 +238,7 @@ export default buildConfig({
 })
 ```
 
-And in their frontend Next.js/React app (`NotificationProvider`), point the WebSocket client to the Dokploy Sockudo instance:
+And in their frontend Next.js/React app (`NotificationProvider`), point the WebSocket client to the Dokploy Soketi instance:
 
 ```tsx
 <NotificationProvider
