@@ -1,7 +1,7 @@
 {
   "name": "payload-plugin-realtime-notifications",
   "version": "1.0.0",
-  "description": "A blank template to get started with Payload 3.0",
+  "description": "Real-time notification dispatching plugin for Payload CMS 3.x",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -19,6 +19,11 @@
       "import": "./src/exports/rsc.ts",
       "types": "./src/exports/rsc.ts",
       "default": "./src/exports/rsc.ts"
+    },
+    "./react": {
+      "import": "./src/exports/react.ts",
+      "types": "./src/exports/react.ts",
+      "default": "./src/exports/react.ts"
     }
   },
   "main": "./src/index.ts",
@@ -69,6 +74,7 @@
     "open": "^10.1.0",
     "payload": "3.84.1",
     "prettier": "^3.4.2",
+    "pusher-js": "^8.5.0",
     "qs-esm": "8.0.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
@@ -80,7 +86,13 @@
     "vitest": "4.0.18"
   },
   "peerDependencies": {
-    "payload": "^3.84.1"
+    "payload": "^3.84.1",
+    "pusher-js": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "pusher-js": {
+      "optional": true
+    }
   },
   "engines": {
     "node": "^18.20.2 || >=20.9.0",
@@ -102,6 +114,11 @@
         "import": "./dist/exports/rsc.js",
         "types": "./dist/exports/rsc.d.ts",
         "default": "./dist/exports/rsc.js"
+      },
+      "./react": {
+        "import": "./dist/exports/react.js",
+        "types": "./dist/exports/react.d.ts",
+        "default": "./dist/exports/react.js"
       }
     },
     "main": "./dist/index.js",
@@ -114,6 +131,5 @@
       "unrs-resolver"
     ]
   },
-  "registry": "https://registry.npmjs.org/",
-  "dependencies": {}
+  "registry": "https://registry.npmjs.org/"
 }
