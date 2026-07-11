@@ -39,7 +39,8 @@ export const NotificationSettings: GlobalConfig = {
       label: 'Enable Notifications',
       defaultValue: false,
       admin: {
-        description: 'Master switch. When disabled, all notification dispatches are silently skipped.',
+        description:
+          'Master switch. When disabled, all notification dispatches are silently skipped.',
       },
     },
 
@@ -78,6 +79,7 @@ export const NotificationSettings: GlobalConfig = {
       admin: {
         condition: (_data, siblingData) => siblingData?.mode === 'saas',
         description: 'Automatically populated after the OAuth handshake. Do not edit manually.',
+        readOnly: true,
       },
     },
     {
@@ -87,6 +89,7 @@ export const NotificationSettings: GlobalConfig = {
       admin: {
         condition: (_data, siblingData) => siblingData?.mode === 'saas',
         description: 'Your unique tenant identifier on the SaaS platform.',
+        readOnly: true,
       },
     },
 
