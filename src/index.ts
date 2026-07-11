@@ -106,6 +106,101 @@ export const notificationsPlugin =
       saasGatewayUrl: pluginOptions.saasGatewayUrl,
     }
 
+    // ── Endpoints ─────────────────────────────────────────────
+    if (!config.endpoints) {
+      config.endpoints = []
+    }
+
+    config.endpoints.push(
+      {
+        path: '/admin-alert',
+        method: 'post',
+        handler: async (req) => {
+          try {
+            const json = (await req.json()) as { message?: string; collection?: string }
+            const message = json.message || 'Alert from client'
+            const collection = json.collection || 'posts'
+
+            const { dispatchEvent } = await import('./dispatcher/dispatchEvent.js')
+
+            dispatchEvent(req.payload, {
+              event: 'admin.alert',
+              collection,
+              operation: 'update',
+              data: {
+                message,
+                timestamp: new Date().toISOString(),
+              },
+            })
+
+            return Response.json({ success: true })
+          } catch (e) {
+            return Response.json({ success: false, error: String(e) }, { status: 500 })
+          }
+        },
+      },
+      {
+        path: '/soketi/connections',
+        method: 'get',
+        handler: async (req) => {
+          try {
+            const settings = (await req.payload.findGlobal({
+              slug: 'notification-settings',
+            })) as any
+
+            if (settings.mode !== 'self-hosted' || !settings.soketiHost) {
+              return Response.json({ count: 1 }) // Fallback mock
+            }
+
+            const searchParams = new URL(req.url).searchParams
+            const channel = searchParams.get('channel') || 'posts'
+
+            const host = settings.soketiHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+            let protocol = settings.soketiHost.startsWith('https') ? 'https' : 'http'
+            if (settings.soketiPort === 443) protocol = 'https'
+
+            const port = settings.soketiPort ? `:${settings.soketiPort}` : ''
+            const path = `/apps/${settings.soketiAppId}/channels/${channel}`
+
+            const authTimestamp = Math.floor(Date.now() / 1000).toString()
+            const queryParams = {
+              auth_key: settings.soketiAppKey,
+              auth_timestamp: authTimestamp,
+              auth_version: '1.0',
+              info: 'subscription_count',
+            }
+
+            const sortedKeys = Object.keys(queryParams).sort() as Array<
+              keyof typeof queryParams
+            >
+            const queryString = sortedKeys.map((key) => `${key}=${queryParams[key]}`).join('&')
+
+            const signString = `GET\n${path}\n${queryString}`
+            const crypto = await import('crypto')
+            const signature = crypto.default
+              .createHmac('sha256', settings.soketiAppSecret)
+              .update(signString)
+              .digest('hex')
+
+            const url = `${protocol}://${host}${port}${path}?${queryString}&auth_signature=${signature}`
+
+            const res = await fetch(url)
+            if (!res.ok) {
+              const errBody = await res.text()
+              throw new Error(`Soketi API returned status ${res.status}: ${errBody}`)
+            }
+
+            const data = (await res.json()) as { subscription_count?: number; occupied?: boolean }
+            
+            return Response.json({ count: data.subscription_count ?? (data.occupied ? 1 : 0) })
+          } catch (e: any) {
+            req.payload.logger.error('Error fetching Soketi connections: ' + e)
+            return Response.json({ count: 1 }) // Fallback mock
+          }
+        },
+      }
+    )
+
     // ── Collection hooks ──────────────────────────────────────
     if (pluginOptions.collections && config.collections) {
       for (const [slug, entry] of Object.entries(pluginOptions.collections)) {

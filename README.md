@@ -224,6 +224,39 @@ function useLiveFeed() {
 - **Sanitized URL bar:** API keys passed back via oauth callback routes are scrubbed synchronously prior to background processing to prevent leaks.
 - **Decoupled Bundling:** Importing frontend components from `/react` guarantees that server-side database tools never leak to client code bundles.
 
+---
+
+## Built-In API Endpoints
+
+The plugin automatically registers two helper endpoints under your Payload API prefix (usually `/api`):
+
+### 1. Active WebSocket Listener Count
+* **Route**: `GET /api/soketi/connections`
+* **Query Parameters**:
+  * `channel` (optional): The WebSocket channel to query. Defaults to `posts`.
+* **Description**: Securely contacts the configured self-hosted Soketi HTTP API using signed requests (HMAC-SHA256) and returns the number of currently active WebSocket listeners (connections) subscribed to that channel.
+* **Response**:
+  ```json
+  {
+    "count": 3
+  }
+  ```
+
+### 2. Client-to-Admin Alert Gateway
+* **Route**: `POST /api/admin-alert`
+* **Body Parameters**:
+  * `message` (optional): The alert message to send. Defaults to `"Alert from client"`.
+  * `collection` (optional): The channel name/collection to broadcast on. Defaults to `"posts"`.
+* **Description**: Receives an alert payload from your client application and broadcasts a custom `admin.alert` event directly to your configured Soketi (WebSockets) and Apprise (Slack, Discord, Email, etc.) dispatch endpoints.
+* **Response**:
+  ```json
+  {
+    "success": true
+  }
+  ```
+
+---
+
 ## License
 
 MIT © [LevantX](https://github.com/levantx-net)

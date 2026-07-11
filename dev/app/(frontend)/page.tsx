@@ -18,6 +18,58 @@ export default function LiveFeedPage() {
   const [toast, setToast] = useState<{ show: boolean; title: string }>({ show: false, title: '' })
   const prevLengthRef = useRef(messages.length)
 
+  // New features state
+  const [userCount, setUserCount] = useState<number>(0)
+  const [alertMessage, setAlertMessage] = useState<string>('')
+  const [isSendingAlert, setIsSendingAlert] = useState<boolean>(false)
+  const [alertStatus, setAlertStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' })
+  // 1. Fetch active users on mount and poll every 5s
+  useEffect(() => {
+    const fetchConnections = () => {
+      fetch('/api/soketi/connections')
+        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((data: { count?: number }) => {
+          setUserCount(data.count ?? 0)
+        })
+        .catch(() => {
+          // Silent fallback
+        })
+    }
+
+    fetchConnections()
+    const interval = setInterval(fetchConnections, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // 2. Send custom alert message to admin endpoint
+  const sendAdminAlert = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!alertMessage.trim()) return
+
+    setIsSendingAlert(true)
+    setAlertStatus({ type: null, message: '' })
+    try {
+      const res = await fetch('/api/admin-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: alertMessage }),
+      })
+
+      if (res.ok) {
+        setAlertMessage('')
+        setAlertStatus({ type: 'success', message: 'Alert successfully sent to Admin!' })
+      } else {
+        setAlertStatus({ type: 'error', message: 'Failed to send alert.' })
+      }
+    } catch {
+      setAlertStatus({ type: 'error', message: 'Network error sending alert.' })
+    } finally {
+      setIsSendingAlert(false)
+      // Auto hide status after 4 seconds
+      setTimeout(() => setAlertStatus({ type: null, message: '' }), 4000)
+    }
+  }
+
   useEffect(() => {
     // Check if a new message has arrived
     if (messages.length > prevLengthRef.current) {
@@ -55,35 +107,132 @@ export default function LiveFeedPage() {
       <header
         style={{ borderBottom: '1px solid #eaeaea', paddingBottom: '1rem', marginBottom: '2rem' }}
       >
-        <h1>Live Post Feed</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span>Status:</span>
-          <span
-            style={{
-              padding: '0.25rem 0.75rem',
-              borderRadius: '999px',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              backgroundColor:
-                status === 'connected'
-                  ? '#dcfce7'
-                  : status === 'connecting'
-                    ? '#fef08a'
-                    : '#fee2e2',
-              color:
-                status === 'connected'
-                  ? '#166534'
-                  : status === 'connecting'
-                    ? '#854d0e'
-                    : '#991b1b',
-            }}
-          >
-            {status.toUpperCase()}
-          </span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h1 style={{ margin: 0 }}>Live Post Feed</h1>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            {/* Connection Status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>Status:</span>
+              <span
+                style={{
+                  padding: '0.25rem 0.75rem',
+                  borderRadius: '999px',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  backgroundColor:
+                    status === 'connected'
+                      ? '#dcfce7'
+                      : status === 'connecting'
+                        ? '#fef08a'
+                        : '#fee2e2',
+                  color:
+                    status === 'connected'
+                      ? '#166534'
+                      : status === 'connecting'
+                        ? '#854d0e'
+                        : '#991b1b',
+                }}
+              >
+                {status.toUpperCase()}
+              </span>
+            </div>
+
+            {/* Active Connection Count */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>Active Listeners:</span>
+              <span
+                style={{
+                  padding: '0.25rem 0.75rem',
+                  borderRadius: '999px',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  backgroundColor: '#dbeafe',
+                  color: '#1e40af',
+                }}
+              >
+                {userCount}
+              </span>
+            </div>
+          </div>
         </div>
       </header>
 
       <main>
+        {/* Send Alert to Admin Box */}
+        <div
+          style={{
+            padding: '1.5rem',
+            backgroundColor: '#f3f4f6',
+            borderRadius: '0.5rem',
+            marginBottom: '2rem',
+            border: '1px solid #e5e7eb',
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: '0.5rem', fontSize: '1.125rem' }}>
+            Send Alert to Admin
+          </h3>
+          <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: 0, marginBottom: '1rem' }}>
+            Type a message below to broadcast a real-time event directly to the Admin's Apprise / Soketi dispatch systems.
+          </p>
+          <form onSubmit={sendAdminAlert} style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type="text"
+              placeholder="e.g. Critical: Database query latency is high!"
+              value={alertMessage}
+              onChange={(e) => setAlertMessage(e.target.value)}
+              style={{
+                flex: 1,
+                padding: '0.5rem 0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+              }}
+              required
+            />
+            <button
+              type="submit"
+              disabled={isSendingAlert}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.375rem',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                opacity: isSendingAlert ? 0.7 : 1,
+              }}
+            >
+              {isSendingAlert ? 'Sending...' : 'Send Alert'}
+            </button>
+          </form>
+
+          {/* Inline Status Message */}
+          {alertStatus.type && (
+            <div
+              style={{
+                marginTop: '1rem',
+                padding: '0.75rem',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                backgroundColor: alertStatus.type === 'success' ? '#dcfce7' : '#fee2e2',
+                color: alertStatus.type === 'success' ? '#166534' : '#991b1b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                animation: 'slideIn 0.3s ease-out',
+              }}
+            >
+              <span style={{ fontSize: '1.25rem' }}>
+                {alertStatus.type === 'success' ? '✅' : '❌'}
+              </span>
+              {alertStatus.message}
+            </div>
+          )}
+        </div>
         <div
           style={{
             display: 'flex',
