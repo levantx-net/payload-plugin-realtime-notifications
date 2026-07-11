@@ -38,7 +38,22 @@ const buildConfigWithMemoryDB = async () => {
     collections: [
       {
         slug: 'posts',
-        fields: [],
+        fields: [
+          {
+            name: 'title',
+            type: 'text',
+            required: true,
+          },
+          {
+            name: 'status',
+            type: 'select',
+            defaultValue: 'draft',
+            options: [
+              { label: 'Draft', value: 'draft' },
+              { label: 'Published', value: 'published' },
+            ],
+          },
+        ],
       },
       {
         slug: 'media',
@@ -60,7 +75,16 @@ const buildConfigWithMemoryDB = async () => {
     plugins: [
       notificationsPlugin({
         collections: {
-          posts: true,
+          posts: {
+            events: ['create', 'update'],
+            condition: ({ doc }) => doc.status === 'published',
+            transform: ({ doc }) => ({
+              id: doc.id,
+              title: doc.title,
+              timestamp: new Date().toISOString(),
+            }),
+            eventName: () => 'feed.post.published',
+          },
         },
       }),
     ],

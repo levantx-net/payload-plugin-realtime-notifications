@@ -59,6 +59,13 @@ export interface NotificationClientConfig {
   enabledTransports?: Array<'ws' | 'wss'>
 
   /**
+   * Disable sending stats to Pusher's logging servers.
+   * Highly recommended when using self-hosted WebSockets like Sockudo.
+   * @default false
+   */
+  disableStats?: boolean
+
+  /**
    * Enable Pusher client logging for debugging.
    * @default false
    */

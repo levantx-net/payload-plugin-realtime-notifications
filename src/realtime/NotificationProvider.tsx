@@ -121,6 +121,7 @@ export function NotificationProvider({ config, children }: NotificationProviderP
         wssPort: config.wssPort,
         forceTLS: config.forceTLS ?? true,
         enabledTransports: config.enabledTransports ?? ['ws', 'wss'],
+        disableStats: config.disableStats ?? false,
         // Pusher logging
         ...(config.enableLogging ? { enableLogging: true } : {}),
       })
