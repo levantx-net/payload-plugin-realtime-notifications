@@ -12,11 +12,15 @@ export default async function FrontendLayout({ children }: { children: ReactNode
   })
 
   // Safely extract only the public variables needed for the frontend connection
+  const cleanHost = settings.soketiHost
+    ? settings.soketiHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+    : 'localhost'
+
   const clientConfig =
     settings.mode === 'self-hosted'
       ? {
           appKey: settings.soketiAppKey ?? 'app-key',
-          wsHost: settings.soketiHost ?? 'localhost',
+          wsHost: cleanHost,
           wsPort: settings.soketiPort ?? 6001,
           forceTLS: true, // Set based on your Soketi deployment
           disableStats: true,

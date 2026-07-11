@@ -1,9 +1,51 @@
+import crypto from 'crypto'
 import type { Payload } from 'payload'
 
 import type { DispatchTarget, NotificationEvent, NotificationSettingsData } from '../types.js'
 
 /** Default SaaS gateway endpoint. */
 const DEFAULT_SAAS_GATEWAY_URL = 'https://api.yoursaas.com/v1'
+
+// ---------------------------------------------------------------------------
+// Signature Helper for Self-Hosted Soketi (Pusher HTTP API)
+// ---------------------------------------------------------------------------
+
+function signPusherRequest({
+  appKey,
+  appSecret,
+  host,
+  protocol,
+  path,
+  body,
+}: {
+  appKey: string
+  appSecret: string
+  host: string
+  protocol: string
+  path: string
+  body: string
+}): string {
+  const bodyMd5 = crypto.createHash('md5').update(body).digest('hex')
+  const authTimestamp = Math.floor(Date.now() / 1000).toString()
+
+  const queryParams = {
+    auth_key: appKey,
+    auth_timestamp: authTimestamp,
+    auth_version: '1.0',
+    body_md5: bodyMd5,
+  }
+
+  // Sort query parameters alphabetically by key
+  const sortedKeys = Object.keys(queryParams).sort() as Array<keyof typeof queryParams>
+  const queryString = sortedKeys
+    .map((key) => `${key}=${queryParams[key]}`)
+    .join('&')
+
+  const signString = `POST\n${path}\n${queryString}`
+  const signature = crypto.createHmac('sha256', appSecret).update(signString).digest('hex')
+
+  return `${protocol}://${host}${path}?${queryString}&auth_signature=${signature}`
+}
 
 // ---------------------------------------------------------------------------
 // Target Resolution
@@ -44,16 +86,52 @@ export function resolveTargets(
 
   // ---- Self-Hosted: Soketi/Sockudo ----
   if (settings.soketiHost) {
-    // Note: To fully support Soketi REST API from the CMS without a proxy,
-    // this target requires Pusher HMAC-SHA256 signing. 
-    // For now, we dispatch to the raw host as a placeholder.
-    const protocol = settings.soketiHost.startsWith('http') ? '' : 'http://'
-    const port = settings.soketiPort ? `:${settings.soketiPort}` : ''
-    targets.push({
-      url: `${protocol}${settings.soketiHost}${port}`,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(event),
-    })
+    if (
+      settings.soketiAppId &&
+      settings.soketiAppKey &&
+      settings.soketiAppSecret
+    ) {
+      const rawHost = settings.soketiHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+      const protocol =
+        settings.soketiHost.startsWith('https') || settings.soketiPort === 443 ? 'https' : 'http'
+      const port = settings.soketiPort ? `:${settings.soketiPort}` : ''
+
+      const path = `/apps/${settings.soketiAppId}/events`
+
+      // Pusher HTTP API requires stringified data
+      const pusherBody = JSON.stringify({
+        name: event.event,
+        channels: [event.collection],
+        data: JSON.stringify({
+          ...event.data,
+          timestamp: event.timestamp,
+        }),
+      })
+
+      const finalUrl = signPusherRequest({
+        appKey: settings.soketiAppKey,
+        appSecret: settings.soketiAppSecret,
+        host: `${rawHost}${port}`,
+        protocol,
+        path,
+        body: pusherBody,
+      })
+
+      targets.push({
+        url: finalUrl,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: pusherBody,
+      })
+    } else {
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[notifications] Soketi is partially configured, but missing App ID, App Key, or App Secret. Skipping WebSocket dispatch.',
+        )
+      }
+    }
   }
 
   // ---- Self-Hosted: Apprise ----
@@ -69,7 +147,7 @@ export function resolveTargets(
     // Apprise expects a specific JSON shape for push notifications
     const appriseBody: Record<string, any> = {
       title: event.event,
-      body: JSON.stringify(event.payload),
+      body: JSON.stringify(event.data),
     }
 
     if (settings.appriseTags) {
@@ -135,16 +213,28 @@ export function dispatchEvent(
             method: 'POST',
             headers: target.headers,
             body: target.body,
-          }).catch((fetchError: unknown) => {
-            // Network failure — swallow silently in production.
-            if (process.env.NODE_ENV === 'development') {
-              // eslint-disable-next-line no-console
-              console.warn(
-                `[notifications] dispatch failed for target ${target.url}:`,
-                fetchError instanceof Error ? fetchError.message : fetchError,
-              )
-            }
           })
+            .then(async (res) => {
+              if (!res.ok) {
+                if (process.env.NODE_ENV === 'development') {
+                  const errorBody = await res.text().catch(() => 'No response body')
+                  // eslint-disable-next-line no-console
+                  console.warn(
+                    `[notifications] dispatch returned status ${res.status} for target ${target.url.split('?')[0]}. Response: ${errorBody}`,
+                  )
+                }
+              }
+            })
+            .catch((fetchError: unknown) => {
+              // Network failure — swallow silently in production.
+              if (process.env.NODE_ENV === 'development') {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  `[notifications] dispatch network failure for target ${target.url.split('?')[0]}:`,
+                  fetchError instanceof Error ? fetchError.message : fetchError,
+                )
+              }
+            })
         }
       })
       .catch((settingsError: unknown) => {

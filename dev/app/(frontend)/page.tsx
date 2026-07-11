@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
+
 import { useConnectionStatus, useNotifications } from 'payload-plugin-realtime-notifications/react'
 
 export default function LiveFeedPage() {
@@ -12,6 +14,39 @@ export default function LiveFeedPage() {
     channel: 'posts',
     events: ['feed.post.published'],
   })
+
+  const [toast, setToast] = useState<{ show: boolean; title: string }>({ show: false, title: '' })
+  const prevLengthRef = useRef(messages.length)
+
+  useEffect(() => {
+    // Check if a new message has arrived
+    if (messages.length > prevLengthRef.current) {
+      const latestMsg = messages[messages.length - 1]
+      if (latestMsg?.data?.title) {
+        // Play the ringtone audio
+        const audio = new Audio('/sounds/ringtone.mp3')
+        audio.play().catch(() => {
+          // Browsers block autoplay/audio until the user interacts with the page
+          // eslint-disable-next-line no-console
+          console.warn('[notifications] Ringtone blocked. Click anywhere on the page first to allow audio.')
+        })
+
+        // Show the toast notification
+        setToast({ show: true, title: latestMsg.data.title })
+      }
+    }
+    prevLengthRef.current = messages.length
+  }, [messages])
+
+  // Auto-hide toast after 4 seconds
+  useEffect(() => {
+    if (toast.show) {
+      const timer = setTimeout(() => {
+        setToast({ show: false, title: '' })
+      }, 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast.show])
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
@@ -117,6 +152,37 @@ export default function LiveFeedPage() {
           </ul>
         )}
       </main>
+
+      {/* ── Floating Toast Notification ── */}
+      {toast.show && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '2rem',
+            right: '2rem',
+            backgroundColor: '#1f2937',
+            color: '#ffffff',
+            padding: '1rem 1.5rem',
+            borderRadius: '0.5rem',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+            zIndex: 9999,
+            borderLeft: '4px solid #10b981',
+            animation: 'slideIn 0.3s ease-out',
+            maxWidth: '350px',
+          }}
+        >
+          <span style={{ fontSize: '1.5rem' }}>🔔</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>New Post Published!</div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {toast.title}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
