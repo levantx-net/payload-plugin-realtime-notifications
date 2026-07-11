@@ -3,7 +3,7 @@ import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import path from 'path'
 import { buildConfig } from 'payload'
-import { payloadPluginRealtimeNotifications } from 'payload-plugin-realtime-notifications'
+import { notificationsPlugin } from 'payload-plugin-realtime-notifications'
 import sharp from 'sharp'
 import { fileURLToPath } from 'url'
 
@@ -58,7 +58,7 @@ const buildConfigWithMemoryDB = async () => {
       await seed(payload)
     },
     plugins: [
-      payloadPluginRealtimeNotifications({
+      notificationsPlugin({
         collections: {
           posts: true,
         },

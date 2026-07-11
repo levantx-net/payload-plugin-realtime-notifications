@@ -1,110 +1,129 @@
 import type { CollectionSlug, Config } from 'payload'
 
-import { customEndpointHandler } from './endpoints/customEndpointHandler.js'
+import { dispatchEvent } from './dispatcher/dispatchEvent.js'
+import { NotificationSettings } from './globals/NotificationSettings.js'
+import type { PluginOptions } from './types.js'
 
-export type PayloadPluginRealtimeNotificationsConfig = {
-  /**
-   * List of collections to add a custom field
-   */
-  collections?: Partial<Record<CollectionSlug, true>>
-  disabled?: boolean
-}
+// ---------------------------------------------------------------------------
+// Re-exports — public API surface
+// ---------------------------------------------------------------------------
 
-export const payloadPluginRealtimeNotifications =
-  (pluginOptions: PayloadPluginRealtimeNotificationsConfig) =>
+export { dispatchEvent } from './dispatcher/dispatchEvent.js'
+export { resolveTarget } from './dispatcher/dispatchEvent.js'
+export type {
+  DispatchTarget,
+  NotificationEvent,
+  NotificationMode,
+  NotificationSettingsData,
+  PluginOptions,
+} from './types.js'
+
+// ---------------------------------------------------------------------------
+// Plugin Factory
+// ---------------------------------------------------------------------------
+
+/**
+ * Payload CMS plugin that adds real-time notification dispatching.
+ *
+ * The plugin is **stateless** — it is an event publisher, not a
+ * connection manager. All dispatch calls are fire-and-forget and
+ * wrapped in `try/catch` to guarantee zero-blocking behaviour.
+ *
+ * @example
+ * ```ts
+ * // payload.config.ts
+ * import { notificationsPlugin } from 'payload-plugin-realtime-notifications'
+ *
+ * export default buildConfig({
+ *   plugins: [
+ *     notificationsPlugin({
+ *       collections: { posts: true, orders: true },
+ *     }),
+ *   ],
+ * })
+ * ```
+ */
+export const notificationsPlugin =
+  (pluginOptions: PluginOptions) =>
   (config: Config): Config => {
-    if (!config.collections) {
-      config.collections = []
+    // ── Ensure arrays exist ───────────────────────────────────
+    if (!config.globals) {
+      config.globals = []
     }
 
-    config.collections.push({
-      slug: 'plugin-collection',
-      fields: [
-        {
-          name: 'id',
-          type: 'text',
-        },
-      ],
-    })
+    // ── Inject the NotificationSettings Global ────────────────
+    // Always inject — even when disabled — so the DB schema stays
+    // consistent for migrations.
+    config.globals.push(NotificationSettings)
 
-    if (pluginOptions.collections) {
-      for (const collectionSlug in pluginOptions.collections) {
-        const collection = config.collections.find(
-          (collection) => collection.slug === collectionSlug,
-        )
-
-        if (collection) {
-          collection.fields.push({
-            name: 'addedByPlugin',
-            type: 'text',
-            admin: {
-              position: 'sidebar',
-            },
-          })
-        }
-      }
-    }
-
-    /**
-     * If the plugin is disabled, we still want to keep added collections/fields so the database schema is consistent which is important for migrations.
-     * If your plugin heavily modifies the database schema, you may want to remove this property.
-     */
+    // ── Early exit if disabled ────────────────────────────────
+    // Schema is already injected above, so the database remains
+    // consistent. We just skip all runtime behaviour.
     if (pluginOptions.disabled) {
       return config
     }
 
-    if (!config.endpoints) {
-      config.endpoints = []
-    }
-
+    // ── Admin UI setup ────────────────────────────────────────
     if (!config.admin) {
       config.admin = {}
     }
 
-    if (!config.admin.components) {
-      config.admin.components = {}
+    // Store the gateway URL override (if any) on the config so
+    // hooks can access it at runtime without re-reading plugin options.
+    // We use Payload's `custom` bag for this.
+    if (!config.custom) {
+      config.custom = {}
+    }
+    config.custom.notificationsPluginOptions = {
+      saasGatewayUrl: pluginOptions.saasGatewayUrl,
     }
 
-    if (!config.admin.components.beforeDashboard) {
-      config.admin.components.beforeDashboard = []
-    }
+    // ── Collection hooks (Phase 3 will expand this) ───────────
+    if (pluginOptions.collections && config.collections) {
+      for (const slug of Object.keys(pluginOptions.collections)) {
+        const collection = config.collections.find((c) => c.slug === slug)
+        if (!collection) continue
 
-    config.admin.components.beforeDashboard.push(
-      `payload-plugin-realtime-notifications/client#BeforeDashboardClient`,
-    )
-    config.admin.components.beforeDashboard.push(
-      `payload-plugin-realtime-notifications/rsc#BeforeDashboardServer`,
-    )
+        if (!collection.hooks) {
+          collection.hooks = {}
+        }
 
-    config.endpoints.push({
-      handler: customEndpointHandler,
-      method: 'get',
-      path: '/my-plugin-endpoint',
-    })
+        // -- afterChange hook --
+        if (!collection.hooks.afterChange) {
+          collection.hooks.afterChange = []
+        }
+        collection.hooks.afterChange.push(({ doc, operation, req }) => {
+          const eventName = `${slug}.${operation === 'create' ? 'created' : 'updated'}`
 
-    const incomingOnInit = config.onInit
+          dispatchEvent(req.payload, {
+            event: eventName,
+            collection: slug as CollectionSlug,
+            operation: operation as 'create' | 'update',
+            data: doc as Record<string, unknown>,
+          }, {
+            saasGatewayUrl: pluginOptions.saasGatewayUrl,
+          })
 
-    config.onInit = async (payload) => {
-      // Ensure we are executing any existing onInit functions before running our own.
-      if (incomingOnInit) {
-        await incomingOnInit(payload)
-      }
+          return doc
+        })
 
-      const { totalDocs } = await payload.count({
-        collection: 'plugin-collection',
-        where: {
-          id: {
-            equals: 'seeded-by-plugin',
-          },
-        },
-      })
+        // -- afterDelete hook --
+        if (!collection.hooks.afterDelete) {
+          collection.hooks.afterDelete = []
+        }
+        collection.hooks.afterDelete.push(({ doc, req }) => {
+          const eventName = `${slug}.deleted`
 
-      if (totalDocs === 0) {
-        await payload.create({
-          collection: 'plugin-collection',
-          data: {
-            id: 'seeded-by-plugin',
-          },
+          dispatchEvent(req.payload, {
+            event: eventName,
+            collection: slug as CollectionSlug,
+            operation: 'delete',
+            data: doc as Record<string, unknown>,
+          }, {
+            saasGatewayUrl: pluginOptions.saasGatewayUrl,
+          })
+
+          return doc
         })
       }
     }

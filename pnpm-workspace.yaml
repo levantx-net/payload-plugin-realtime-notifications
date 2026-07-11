@@ -1,3 +1,6 @@
+packages:
+  - '.'
+  - 'dev'
 allowBuilds:
   esbuild: true
   sharp: true
