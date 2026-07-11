@@ -6,7 +6,9 @@ import { useConnectionStatus, useNotifications } from 'payload-plugin-realtime-n
 
 export default function LiveFeedPage() {
   const status = useConnectionStatus()
-  const { messages, clearMessages } = useNotifications<{
+
+  // Existing Posts feed
+  const { messages: postMessages, clearMessages: clearPostMessages } = useNotifications<{
     id: string | number
     title: string
     timestamp: string
@@ -15,34 +17,59 @@ export default function LiveFeedPage() {
     events: ['feed.post.published'],
   })
 
-  const [toast, setToast] = useState<{ show: boolean; title: string }>({ show: false, title: '' })
-  const prevLengthRef = useRef(messages.length)
+  // NEW: Presence Chat Room Subscription
+  const { messages: chatMessages, clearMessages: clearChatMessages } = useNotifications<{
+    message: string
+    timestamp: string
+  }>({
+    channel: 'presence-chat-room',
+  })
 
-  // New features state
+  const [toast, setToast] = useState<{ show: boolean; title: string }>({ show: false, title: '' })
+  const prevLengthRef = useRef(postMessages.length)
+
   const [userCount, setUserCount] = useState<number>(0)
+  const [activeChannels, setActiveChannels] = useState<Record<string, any>>({})
+
   const [alertMessage, setAlertMessage] = useState<string>('')
   const [isSendingAlert, setIsSendingAlert] = useState<boolean>(false)
-  const [alertStatus, setAlertStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' })
-  // 1. Fetch active users on mount and poll every 5s
+  const [alertStatus, setAlertStatus] = useState<{
+    type: 'success' | 'error' | null
+    message: string
+  }>({ type: null, message: '' })
+
+  // 1. Fetch active listeners and active channels lobby
   useEffect(() => {
-    const fetchConnections = () => {
+    const fetchStats = () => {
+      // Fetch user count for 'posts'
       fetch('/api/soketi/connections')
-        .then((res) => (res.ok ? res.json() : Promise.reject()))
-        .then((data: { count?: number }) => {
-          setUserCount(data.count ?? 0)
-        })
-        .catch(() => {
-          // Silent fallback
-        })
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('No live connections'))))
+        .then((data) => setUserCount(data.count ?? 0))
+        .catch((err) => console.log(err))
+
+      // Fetch all active channels
+      fetch('/api/soketi/channels')
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('No live connections'))))
+        .then((data) => setActiveChannels(data.channels ?? {}))
+        .catch((err) => console.log(err))
     }
 
-    fetchConnections()
-    const interval = setInterval(fetchConnections, 5000)
-    return () => clearInterval(interval)
-  }, [])
+    if (status === 'connected') {
+      // Small delay to ensure the current tab's channel subscription registers on Soketi
+      const delayTimeout = setTimeout(fetchStats, 500)
+      const interval = setInterval(fetchStats, 5000)
 
-  // 2. Send custom alert message to admin endpoint
-  const sendAdminAlert = async (e: React.FormEvent) => {
+      return () => {
+        clearTimeout(delayTimeout)
+        clearInterval(interval)
+      }
+    } else {
+      setUserCount(0)
+    }
+  }, [status])
+
+  // 2. Broadcast message to Admin & Chat Room
+  const sendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!alertMessage.trim()) return
 
@@ -52,66 +79,53 @@ export default function LiveFeedPage() {
       const res = await fetch('/api/admin-alert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: alertMessage }),
+        // Target the presence channel!
+        body: JSON.stringify({ message: alertMessage, collection: 'presence-chat-room' }),
       })
 
       if (res.ok) {
         setAlertMessage('')
-        setAlertStatus({ type: 'success', message: 'Alert successfully sent to Admin!' })
+        setAlertStatus({ type: 'success', message: 'Broadcast sent to Admin & Chat Room!' })
       } else {
-        setAlertStatus({ type: 'error', message: 'Failed to send alert.' })
+        setAlertStatus({ type: 'error', message: 'Failed to send broadcast.' })
       }
     } catch {
-      setAlertStatus({ type: 'error', message: 'Network error sending alert.' })
+      setAlertStatus({ type: 'error', message: 'Network error sending broadcast.' })
     } finally {
       setIsSendingAlert(false)
-      // Auto hide status after 4 seconds
       setTimeout(() => setAlertStatus({ type: null, message: '' }), 4000)
     }
   }
 
+  // Handle post notifications audio/toast
   useEffect(() => {
-    // Check if a new message has arrived
-    if (messages.length > prevLengthRef.current) {
-      const latestMsg = messages[messages.length - 1]
+    if (postMessages.length > prevLengthRef.current) {
+      const latestMsg = postMessages[postMessages.length - 1]
       if (latestMsg?.data?.title) {
-        // Play the ringtone audio
         const audio = new Audio('/sounds/ringtone.mp3')
-        audio.play().catch(() => {
-          // Browsers block autoplay/audio until the user interacts with the page
-          // eslint-disable-next-line no-console
-          console.warn(
-            '[notifications] Ringtone blocked. Click anywhere on the page first to allow audio.',
-          )
-        })
-
-        // Show the toast notification
+        audio.play().catch(() => {})
         setToast({ show: true, title: latestMsg.data.title })
       }
     }
-    prevLengthRef.current = messages.length
-  }, [messages])
+    prevLengthRef.current = postMessages.length
+  }, [postMessages])
 
-  // Auto-hide toast after 4 seconds
   useEffect(() => {
     if (toast.show) {
-      const timer = setTimeout(() => {
-        setToast({ show: false, title: '' })
-      }, 4000)
+      const timer = setTimeout(() => setToast({ show: false, title: '' }), 4000)
       return () => clearTimeout(timer)
     }
   }, [toast.show])
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
+    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
       <header
         style={{ borderBottom: '1px solid #eaeaea', paddingBottom: '1rem', marginBottom: '2rem' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ margin: 0 }}>Live Post Feed</h1>
-          
+          <h1 style={{ margin: 0 }}>Real-Time Features Demo</h1>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            {/* Connection Status */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span>Status:</span>
               <span
@@ -137,10 +151,8 @@ export default function LiveFeedPage() {
                 {status.toUpperCase()}
               </span>
             </div>
-
-            {/* Active Connection Count */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>Active Listeners:</span>
+              <span>Global Listeners:</span>
               <span
                 style={{
                   padding: '0.25rem 0.75rem',
@@ -158,27 +170,98 @@ export default function LiveFeedPage() {
         </div>
       </header>
 
-      <main>
-        {/* Send Alert to Admin Box */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '2rem',
+          marginBottom: '2rem',
+        }}
+      >
+        {/* ── Active Channels Lobby ── */}
+        <div
+          style={{
+            padding: '1.5rem',
+            backgroundColor: '#f9fafb',
+            borderRadius: '0.5rem',
+            border: '1px solid #e5e7eb',
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: '1rem', fontSize: '1.125rem' }}>
+            {' '}
+            <span role="img" aria-label="Active Channels Directory">
+              📡
+            </span>{' '}
+            Active Channels Directory
+          </h3>
+          <p style={{ fontSize: '0.875rem', color: '#4b5563', marginBottom: '1rem' }}>
+            Powered by <code>/api/soketi/channels</code>
+          </p>
+
+          {Object.keys(activeChannels).length === 0 ? (
+            <div style={{ fontSize: '0.875rem', color: '#9ca3af' }}>No active channels found.</div>
+          ) : (
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                margin: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem',
+              }}
+            >
+              {Object.keys(activeChannels).map((ch) => (
+                <li
+                  key={ch}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    padding: '0.5rem',
+                    backgroundColor: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '0.25rem',
+                  }}
+                >
+                  <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{ch}</span>
+                  <span
+                    style={{
+                      fontSize: '0.75rem',
+                      backgroundColor: '#e5e7eb',
+                      padding: '0.1rem 0.5rem',
+                      borderRadius: '999px',
+                    }}
+                  >
+                    Active
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* ── Broadcast Message ── */}
         <div
           style={{
             padding: '1.5rem',
             backgroundColor: '#f3f4f6',
             borderRadius: '0.5rem',
-            marginBottom: '2rem',
             border: '1px solid #e5e7eb',
           }}
         >
           <h3 style={{ marginTop: 0, marginBottom: '0.5rem', fontSize: '1.125rem' }}>
-            Send Alert to Admin
+            <span role="img" aria-label="Broadcast & Alert">
+              💬
+            </span>
+            Broadcast & Alert
           </h3>
           <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: 0, marginBottom: '1rem' }}>
-            Type a message below to broadcast a real-time event directly to the Admin's Apprise / Soketi dispatch systems.
+            Sends to Admin Apprise AND the <code>presence-chat-room</code> channel.
           </p>
-          <form onSubmit={sendAdminAlert} style={{ display: 'flex', gap: '0.5rem' }}>
+          <form onSubmit={sendBroadcast} style={{ display: 'flex', gap: '0.5rem' }}>
             <input
               type="text"
-              placeholder="e.g. Critical: Database query latency is high!"
+              placeholder="Type message here..."
               value={alertMessage}
               onChange={(e) => setAlertMessage(e.target.value)}
               style={{
@@ -205,11 +288,10 @@ export default function LiveFeedPage() {
                 opacity: isSendingAlert ? 0.7 : 1,
               }}
             >
-              {isSendingAlert ? 'Sending...' : 'Send Alert'}
+              {isSendingAlert ? 'Sending...' : 'Send'}
             </button>
           </form>
 
-          {/* Inline Status Message */}
           {alertStatus.type && (
             <div
               style={{
@@ -223,88 +305,141 @@ export default function LiveFeedPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
-                animation: 'slideIn 0.3s ease-out',
               }}
             >
-              <span style={{ fontSize: '1.25rem' }}>
-                {alertStatus.type === 'success' ? '✅' : '❌'}
-              </span>
+              <span>{alertStatus.type === 'success' ? '✅' : '❌'}</span>
               {alertStatus.message}
             </div>
           )}
         </div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '1rem',
-          }}
-        >
-          <h2>Recent Activity ({messages.length})</h2>
-          {messages.length > 0 && (
-            <button
-              onClick={clearMessages}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+        {/* ── Presence Chat Room Feed ── */}
+        <div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1rem',
+            }}
+          >
+            <h2>Live Chat Feed</h2>
+            {chatMessages.length > 0 && (
+              <button
+                onClick={clearChatMessages}
+                style={{ padding: '0.25rem 0.75rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                type="button"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          {chatMessages.length === 0 ? (
+            <div
               style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#f3f4f6',
-                border: 'none',
-                borderRadius: '0.375rem',
-                cursor: 'pointer',
+                padding: '2rem',
+                textAlign: 'center',
+                backgroundColor: '#f9fafb',
+                borderRadius: '0.5rem',
+                color: '#6b7280',
+                fontSize: '0.875rem',
               }}
-              type="button"
             >
-              Clear Feed
-            </button>
+              Waiting for chat messages...
+            </div>
+          ) : (
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem',
+              }}
+            >
+              {chatMessages.map((msg, idx) => (
+                <li
+                  key={idx}
+                  style={{
+                    padding: '1rem',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '0.5rem',
+                    backgroundColor: '#eff6ff',
+                  }}
+                >
+                  <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>
+                    {new Date(msg.data.timestamp).toLocaleTimeString()}
+                  </div>
+                  <div style={{ fontSize: '1rem', fontWeight: 500 }}>{msg.data.message}</div>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
-        {messages.length === 0 ? (
+        {/* ── CMS Posts Feed ── */}
+        <div>
           <div
             style={{
-              padding: '3rem',
-              textAlign: 'center',
-              backgroundColor: '#f9fafb',
-              borderRadius: '0.5rem',
-            }}
-          >
-            <p style={{ color: '#6b7280' }}>Waiting for new posts...</p>
-            <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>
-              (Try creating a post and setting its status to "Published" in the admin panel)
-            </p>
-          </div>
-        ) : (
-          <ul
-            style={{
-              listStyle: 'none',
-              padding: 0,
               display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1rem',
             }}
           >
-            {messages.map((msg, idx) => (
-              <li
-                key={idx}
-                style={{
-                  padding: '1.5rem',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '0.5rem',
-                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                  animation: 'slideIn 0.3s ease-out forwards',
-                }}
+            <h2>CMS Posts Feed</h2>
+            {postMessages.length > 0 && (
+              <button
+                onClick={clearPostMessages}
+                style={{ padding: '0.25rem 0.75rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                type="button"
               >
-                <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
-                  {new Date(msg.data.timestamp).toLocaleTimeString()}
-                </div>
-                <div style={{ fontSize: '1.125rem', fontWeight: 500 }}>{msg.data.title}</div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </main>
+                Clear
+              </button>
+            )}
+          </div>
+          {postMessages.length === 0 ? (
+            <div
+              style={{
+                padding: '2rem',
+                textAlign: 'center',
+                backgroundColor: '#f9fafb',
+                borderRadius: '0.5rem',
+                color: '#6b7280',
+                fontSize: '0.875rem',
+              }}
+            >
+              Waiting for new posts from Admin...
+            </div>
+          ) : (
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem',
+              }}
+            >
+              {postMessages.map((msg, idx) => (
+                <li
+                  key={idx}
+                  style={{ padding: '1rem', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}
+                >
+                  <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>
+                    {new Date(msg.data.timestamp).toLocaleTimeString()}
+                  </div>
+                  <div style={{ fontSize: '1rem', fontWeight: 500 }}>{msg.data.title}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
 
-      {/* ── Floating Toast Notification ── */}
+      {/* Toast Notification */}
       {toast.show && (
         <div
           style={{
@@ -315,32 +450,21 @@ export default function LiveFeedPage() {
             color: '#ffffff',
             padding: '1rem 1.5rem',
             borderRadius: '0.5rem',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
             display: 'flex',
             alignItems: 'center',
             gap: '1rem',
             zIndex: 9999,
             borderLeft: '4px solid #10b981',
-            animation: 'slideIn 0.3s ease-out',
             maxWidth: '350px',
           }}
         >
-          <span style={{ fontSize: '1.5rem' }} role="img" aria-label="notification bell">
+          <span style={{ fontSize: '1.5rem' }} role="img" aria-label="New Post Published!">
             🔔
           </span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>New Post Published!</div>
-            <div
-              style={{
-                fontSize: '0.75rem',
-                opacity: 0.9,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {toast.title}
-            </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>{toast.title}</div>
           </div>
         </div>
       )}
