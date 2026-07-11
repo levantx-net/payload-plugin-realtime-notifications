@@ -67,7 +67,7 @@ function ToastListener() {
  * here instead of hardcoding it, or wrap your entire Payload `RootLayout` in the provider.
  * For this drop-in, it assumes a local or standard Sockudo instance.
  */
-export function AdminLiveToast() {
+export function AdminLiveToast(): React.ReactNode {
   return (
     <NotificationProvider
       config={{

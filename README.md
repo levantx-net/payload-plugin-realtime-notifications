@@ -260,12 +260,11 @@ Register a background listener that pops up real-time toasts directly inside you
 
 ```typescript
 import { buildConfig } from 'payload'
-import { AdminLiveToast } from 'payload-plugin-realtime-notifications/client'
 
 export default buildConfig({
   admin: {
     components: {
-      afterNav: [AdminLiveToast],
+      afterNav: ['payload-plugin-realtime-notifications/client#AdminLiveToast'],
     },
   },
 })

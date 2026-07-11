@@ -124,7 +124,7 @@ export const notificationsPlugin =
         method: 'post',
         handler: async (req) => {
           try {
-            const json = (await req.json()) as { message?: string; collection?: string }
+            const json = ((await req.json?.()) || {}) as { message?: string; collection?: string }
             const message = json.message || 'Alert from client'
             const collection = json.collection || 'posts'
 
@@ -159,7 +159,7 @@ export const notificationsPlugin =
               return Response.json({ count: 1 }) // Fallback mock
             }
 
-            const searchParams = new URL(req.url).searchParams
+            const searchParams = new URL(req.url as string).searchParams
             const channel = searchParams.get('channel') || 'posts'
 
             const host = settings.soketiHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
@@ -177,9 +177,7 @@ export const notificationsPlugin =
               info: 'subscription_count',
             }
 
-            const sortedKeys = Object.keys(queryParams).sort() as Array<
-              keyof typeof queryParams
-            >
+            const sortedKeys = Object.keys(queryParams).sort() as Array<keyof typeof queryParams>
             const queryString = sortedKeys.map((key) => `${key}=${queryParams[key]}`).join('&')
 
             const signString = `GET\n${path}\n${queryString}`
@@ -198,7 +196,7 @@ export const notificationsPlugin =
             }
 
             const data = (await res.json()) as { subscription_count?: number; occupied?: boolean }
-            
+
             return Response.json({ count: data.subscription_count ?? (data.occupied ? 1 : 0) })
           } catch (e: any) {
             req.payload.logger.error('Error fetching Soketi connections: ' + e)
@@ -219,7 +217,7 @@ export const notificationsPlugin =
               return new Response('Unauthorized', { status: 403 })
             }
 
-            const text = await req.text()
+            const text = (await req.text?.()) || ''
             const params = new URLSearchParams(text)
             const socketId = params.get('socket_id')
             const channelName = params.get('channel_name')
@@ -258,8 +256,8 @@ export const notificationsPlugin =
             }
 
             return Response.json(authResponse)
-          } catch (e) {
-            req.payload.logger.error('Soketi Auth Error: ' + e)
+          } catch (e: any) {
+            req.payload.logger.error('Soketi Auth Error: ' + e.toString())
             return new Response('Server Error', { status: 500 })
           }
         },
@@ -277,7 +275,7 @@ export const notificationsPlugin =
               return Response.json({ channels: {} })
             }
 
-            const searchParams = new URL(req.url).searchParams
+            const searchParams = new URL(req.url as string).searchParams
             const prefix = searchParams.get('filter_by_prefix')
 
             const host = settings.soketiHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
@@ -337,7 +335,7 @@ export const notificationsPlugin =
               return new Response('Not configured', { status: 400 })
             }
 
-            const rawBody = await req.text()
+            const rawBody = (await req.text?.()) || ''
             const signatureHeader = req.headers.get('x-pusher-signature')
 
             if (!signatureHeader) {
@@ -360,7 +358,7 @@ export const notificationsPlugin =
               req.payload.logger.info(
                 `[notifications] Webhook Event: ${event.name} on ${event.channel}`,
               )
-              
+
               // Automatically write to the audit trail
               await req.payload.create({
                 collection: 'realtime-logs',
@@ -375,12 +373,12 @@ export const notificationsPlugin =
             }
 
             return Response.json({ success: true })
-          } catch (e) {
-            req.payload.logger.error('Webhook processing error: ' + e)
+          } catch (e: any) {
+            req.payload.logger.error('Webhook processing error: ' + e.toString())
             return new Response('Server Error', { status: 500 })
           }
         },
-      }
+      },
     )
 
     // ── Collection hooks ──────────────────────────────────────
@@ -471,14 +469,14 @@ export const notificationsPlugin =
                 '[notifications] Automatically enrolled in the Free Tier. Real-time events are now active!',
               )
             }
-          } catch (err) {
+          } catch (_) {
             // Silently fail if offline or gateway is unreachable
             payload.logger.warn(
               '[notifications] Could not auto-enroll in free tier (network issue).',
             )
           }
         }
-      } catch (err) {
+      } catch (_) {
         // Ignore errors if the database or collection isn't ready
       }
     }

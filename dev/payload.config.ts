@@ -3,10 +3,9 @@ import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import path from 'path'
 import { buildConfig } from 'payload'
-import { notificationsPlugin, dispatchEvent } from 'payload-plugin-realtime-notifications'
+import { notificationsPlugin } from 'payload-plugin-realtime-notifications'
 import sharp from 'sharp'
 import { fileURLToPath } from 'url'
-import crypto from 'crypto'
 
 import { testEmailAdapter } from './helpers/testEmailAdapter.js'
 import { seed } from './seed.js'
@@ -32,6 +31,9 @@ const buildConfigWithMemoryDB = async () => {
 
   return buildConfig({
     admin: {
+      components: {
+        afterNav: ['payload-plugin-realtime-notifications/client#AdminLiveToast'],
+      },
       importMap: {
         baseDir: path.resolve(dirname),
       },

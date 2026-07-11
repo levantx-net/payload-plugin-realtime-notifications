@@ -2,10 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-import { useConnectionStatus, useNotifications } from 'payload-plugin-realtime-notifications/react'
+import { useConnectionStatus, useNotifications, usePresence, useTypingIndicator, LiveIndicator } from 'payload-plugin-realtime-notifications/react'
 
 export default function LiveFeedPage() {
   const status = useConnectionStatus()
+  const [localUser] = useState(() => 'User_' + Math.floor(Math.random() * 10000))
+
+  const { members, count: presenceCount, myId } = usePresence<{ email: string }>('presence-chat-room')
+  const { isTyping, typingUsers, triggerTyping } = useTypingIndicator('presence-chat-room', localUser)
 
   // Existing Posts feed
   const { messages: postMessages, clearMessages: clearPostMessages } = useNotifications<{
@@ -126,31 +130,7 @@ export default function LiveFeedPage() {
           <h1 style={{ margin: 0 }}>Real-Time Features Demo</h1>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>Status:</span>
-              <span
-                style={{
-                  padding: '0.25rem 0.75rem',
-                  borderRadius: '999px',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  backgroundColor:
-                    status === 'connected'
-                      ? '#dcfce7'
-                      : status === 'connecting'
-                        ? '#fef08a'
-                        : '#fee2e2',
-                  color:
-                    status === 'connected'
-                      ? '#166534'
-                      : status === 'connecting'
-                        ? '#854d0e'
-                        : '#991b1b',
-                }}
-              >
-                {status.toUpperCase()}
-              </span>
-            </div>
+            <LiveIndicator label={`Status: ${status.toUpperCase()}`} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span>Global Listeners:</span>
               <span
@@ -238,6 +218,26 @@ export default function LiveFeedPage() {
               ))}
             </ul>
           )}
+
+          <h3 style={{ marginTop: '2rem', marginBottom: '1rem', fontSize: '1.125rem' }}>
+            <span role="img" aria-label="Who's Online">
+              👥
+            </span>{' '}
+            Who's Online ({presenceCount})
+          </h3>
+          <p style={{ fontSize: '0.875rem', color: '#4b5563', marginBottom: '1rem' }}>
+            Powered by <code>usePresence</code>
+          </p>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {Object.entries(members).map(([userId, userInfo]) => (
+              <li key={userId} style={{ fontSize: '0.875rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} />
+                <span style={{ fontWeight: userId === myId ? 600 : 400 }}>
+                  {userInfo?.email || userId} {userId === myId && '(You)'}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
 
         {/* ── Broadcast Message ── */}
@@ -261,9 +261,12 @@ export default function LiveFeedPage() {
           <form onSubmit={sendBroadcast} style={{ display: 'flex', gap: '0.5rem' }}>
             <input
               type="text"
-              placeholder="Type message here..."
+              placeholder={`Type message here as ${localUser}...`}
               value={alertMessage}
-              onChange={(e) => setAlertMessage(e.target.value)}
+              onChange={(e) => {
+                setAlertMessage(e.target.value)
+                triggerTyping()
+              }}
               style={{
                 flex: 1,
                 padding: '0.5rem 0.75rem',
@@ -291,6 +294,12 @@ export default function LiveFeedPage() {
               {isSendingAlert ? 'Sending...' : 'Send'}
             </button>
           </form>
+
+          {isTyping && (
+            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.5rem', fontStyle: 'italic' }}>
+              {Object.keys(typingUsers).join(', ')} {Object.keys(typingUsers).length === 1 ? 'is' : 'are'} typing...
+            </div>
+          )}
 
           {alertStatus.type && (
             <div
