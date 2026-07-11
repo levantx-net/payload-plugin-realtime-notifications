@@ -28,11 +28,14 @@ export function DisconnectedView({ saasConnectUrl }: DisconnectedViewProps) {
   const [isLoadingTiers, setIsLoadingTiers] = React.useState(true)
 
   React.useEffect(() => {
-    // TODO: Replace this with a real API fetch to the SaaS portal once it's deployed.
-    // e.g., fetch('https://api.yoursaas.com/v1/pricing').then(res => res.json())
-    import('./pricing.json')
-      .then((mod) => {
-        setPricingTiers(mod.default as PricingTier[])
+    // Fetch pricing tiers directly from the main repository branch
+    fetch('https://raw.githubusercontent.com/levantx-net/payload-plugin-realtime-notifications/main/src/components/NotificationDashboard/pricing.json')
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
+        return res.json()
+      })
+      .then((data) => {
+        setPricingTiers(data as PricingTier[])
       })
       .catch((err) => {
         // eslint-disable-next-line no-console
