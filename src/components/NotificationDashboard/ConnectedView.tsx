@@ -139,9 +139,12 @@ export function ConnectedView({
       {/* ── Usage Metrics ──────────────────────────────────── */}
       <div className={styles.usageSection}>
         <h3 className={styles.usageSectionTitle}>
-          Usage This Period
-          {usage?.plan && <span className={styles.planBadge}>{usage.plan}</span>}
+          Active Service: {usage?.plan ? `${usage.plan} Tier` : 'Loading...'}
         </h3>
+        
+        <p style={{ margin: '0.5rem 0 1rem', fontSize: '0.875rem', color: '#6b7280' }}>
+          Usage so far this period:
+        </p>
 
         {isLoadingUsage && (
           <p className={styles.loadingText}>Loading usage data…</p>

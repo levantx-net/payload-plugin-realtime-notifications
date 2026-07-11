@@ -18,6 +18,16 @@ const DEFAULT_SAAS_CONNECT_URL = 'https://app.yoursaas.com/connect'
  */
 const PRICING_TIERS: PricingTier[] = [
   {
+    name: 'Free',
+    price: '$0/mo',
+    features: [
+      '100 WebSocket events/mo',
+      '10 push notifications/mo',
+      'Community support',
+      '1 project',
+    ],
+  },
+  {
     name: 'Starter',
     price: '$9/mo',
     features: [
@@ -97,12 +107,12 @@ export function DisconnectedView({ saasConnectUrl }: DisconnectedViewProps) {
         className={styles.connectButton}
         onClick={handleConnect}
       >
-        Connect &amp; Subscribe
+        Connect &amp; Start for Free
       </button>
 
       <p className={styles.disconnectedFooter}>
-        Already self-hosting? Switch to <strong>Self-Hosted</strong> mode in the
-        settings fields above to configure your own Sockudo or Apprise instance.
+        Already self-hosting? Change the <strong>Delivery Mode</strong> to Self-Hosted
+        to configure your own Sockudo or Apprise instance.
       </p>
     </div>
   )

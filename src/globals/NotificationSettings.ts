@@ -26,16 +26,6 @@ export const NotificationSettings: GlobalConfig = {
   // ------------------------------------------------------------------
   admin: {
     group: 'Plugins',
-    components: {
-      views: {
-        edit: {
-          default: {
-            Component:
-              'payload-plugin-realtime-notifications/client#NotificationDashboard',
-          },
-        },
-      },
-    },
   },
 
   // ------------------------------------------------------------------
@@ -65,6 +55,18 @@ export const NotificationSettings: GlobalConfig = {
       ],
       admin: {
         description: 'Choose between the managed cloud gateway or your own infrastructure.',
+      },
+    },
+
+    // ---- Dashboard / Usage Metrics UI ----
+    {
+      name: 'dashboardUI',
+      type: 'ui',
+      admin: {
+        components: {
+          Field: 'payload-plugin-realtime-notifications/client#NotificationDashboard',
+        },
+        condition: (_data, siblingData) => siblingData?.mode === 'saas',
       },
     },
 

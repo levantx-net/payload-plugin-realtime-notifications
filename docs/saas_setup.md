@@ -67,24 +67,26 @@ You need a persistent database (e.g., PostgreSQL or MongoDB) for accounts and a 
      - `customer.subscription.updated`: Syncs active plan updates.
 
 ### Step 3: Implement OAuth Handshake Redirection (`/connect`)
-In the SaaS Web Portal, build the route `GET /connect` that prompts users to login/register and then redirects them to pay.
+In the SaaS Web Portal, build the route `GET /connect` that prompts users to login/register and then provisions their account. To ensure a seamless connection, provide a frictionless path for the Free tier.
 
-1. **Capture Callback URL:**
-   - The user is redirected from the CMS Admin panel with the query param `?callback_url=...`. Store this URL in the browser session or state.
-2. **Prompt Sign-up & Stripe Checkout:**
-   - If not authenticated, prompt sign-up.
-   - Redirect the user to a Stripe Checkout Session for the selected plan tier.
-3. **Generate Keys on Success:**
-   - Upon successful Stripe Payment completion, query your SaaS database:
+1. **Capture Callback URL & Plan Choice:**
+   - The user is redirected from the CMS Admin panel with `?callback_url=...&plan=free` (or starter/growth). Store this URL in the browser session or state.
+2. **Prompt Sign-up & Authenticate:**
+   - If not authenticated, prompt the user to create an account.
+3. **Provision the Account (Frictionless vs. Paid):**
+   - **For Free Tier:** Instantly provision the account in your database. Bypass Stripe Checkout completely so developers can start testing immediately.
+   - **For Paid Tiers:** Redirect the user to a Stripe Checkout Session for the selected plan tier.
+4. **Generate Keys on Success:**
+   - Upon successful account creation or Stripe Payment, query your SaaS database:
      - Check if the user already has a `tenantId` and `saasApiKey`. If not, generate them:
        - `tenantId`: Generate a standard UUID (e.g. `123e4567-e89b-12d3-a456-426614174000`).
        - `saasApiKey`: Generate a secure random prefix token (e.g. `sk_live_5e8e...`).
-4. **Redirect back to CMS:**
+5. **Redirect back to CMS:**
    - Construct the redirection URL using the captured `callback_url`:
      ```
      {callback_url}?saas_api_key={saasApiKey}&tenant_id={tenantId}
      ```
-   - Redirect the developer's browser back to this URL.
+   - Redirect the developer's browser back to this URL. The plugin handles the rest!
 
 ---
 
@@ -105,7 +107,23 @@ Invoked automatically by the Payload collection hooks.
   6. Forward the event payload internally to your Sockudo / WebSocket cluster.
   7. Return `200 OK`.
 
-### 2. Tenant Usage Metrics: `GET /v1/tenant/usage`
+### 2. Auto-Enrollment (Free Tier out-of-the-box): `POST /v1/auto-enroll`
+Invoked silently by the Payload CMS plugin when it boots up (`onInit`) and detects no API keys. This enables the "out of the box" experience.
+
+* **Headers:** None (or origin checks).
+* **Execution Flow:**
+  1. Instantly provision an anonymous tenant in the database.
+  2. Generate a `tenantId` and a `saasApiKey` limited to the free tier (e.g., 100 events).
+  3. Return the credentials:
+     ```json
+     {
+       "tenantId": "123e4567-e89b...",
+       "saasApiKey": "sk_free_..."
+     }
+     ```
+  4. The CMS plugin saves this automatically and immediately begins dispatching events!
+
+### 3. Tenant Usage Metrics: `GET /v1/tenant/usage`
 Invoked by the CMS Connected Dashboard UI to render the progress bars.
 
 * **Headers:** `Authorization: Bearer {saasApiKey}`

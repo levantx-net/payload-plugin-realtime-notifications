@@ -158,5 +158,52 @@ export const notificationsPlugin =
       }
     }
 
+    // ── Auto-Enrollment (Free Tier out-of-the-box) ───────────
+    const existingOnInit = config.onInit
+    config.onInit = async (payload) => {
+      // 1. Run the consumer's original onInit first
+      if (existingOnInit) {
+        await existingOnInit(payload)
+      }
+
+      // 2. Check if we need to auto-enroll
+      try {
+        const settings = await payload.findGlobal({ slug: 'notification-settings' })
+        
+        // If no key exists and it hasn't been explicitly configured yet
+        if (!settings?.saasApiKey && settings?.mode !== 'self-hosted') {
+          const baseUrl = pluginOptions.saasGatewayUrl ?? 'https://api.yoursaas.com/v1'
+          
+          try {
+            // Hit the SaaS Gateway to generate free-tier credentials
+            const res = await fetch(`${baseUrl}/auto-enroll`, { method: 'POST' })
+            if (res.ok) {
+              const data = (await res.json()) as { saasApiKey: string; tenantId: string }
+              
+              // Automatically save and activate the settings
+              await payload.updateGlobal({
+                slug: 'notification-settings',
+                data: {
+                  enabled: true,
+                  mode: 'saas',
+                  saasApiKey: data.saasApiKey,
+                  tenantId: data.tenantId,
+                },
+              })
+              
+              payload.logger.info(
+                '[notifications] Automatically enrolled in the Free Tier. Real-time events are now active!',
+              )
+            }
+          } catch (err) {
+            // Silently fail if offline or gateway is unreachable
+            payload.logger.warn('[notifications] Could not auto-enroll in free tier (network issue).')
+          }
+        }
+      } catch (err) {
+        // Ignore errors if the database or collection isn't ready
+      }
+    }
+
     return config
   }

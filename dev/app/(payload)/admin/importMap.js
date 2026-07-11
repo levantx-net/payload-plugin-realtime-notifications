@@ -1,9 +1,8 @@
-import { BeforeDashboardClient as BeforeDashboardClient_fc6e7dd366b9e2c8ce77d31252122343 } from 'payload-plugin-realtime-notifications/client'
-import { BeforeDashboardServer as BeforeDashboardServer_c4406fcca100b2553312c5a3d7520a3f } from 'payload-plugin-realtime-notifications/rsc'
+import { NotificationDashboard as NotificationDashboard_3acf83f81650c60150290b0968c75984 } from 'payload-plugin-realtime-notifications/client'
+import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
 
+/** @type import('payload').ImportMap */
 export const importMap = {
-  'payload-plugin-realtime-notifications/client#BeforeDashboardClient':
-    BeforeDashboardClient_fc6e7dd366b9e2c8ce77d31252122343,
-  'payload-plugin-realtime-notifications/rsc#BeforeDashboardServer':
-    BeforeDashboardServer_c4406fcca100b2553312c5a3d7520a3f,
+  "payload-plugin-realtime-notifications/client#NotificationDashboard": NotificationDashboard_3acf83f81650c60150290b0968c75984,
+  "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1
 }
