@@ -11,45 +11,6 @@ import styles from './NotificationDashboard.module.css'
  */
 const DEFAULT_SAAS_CONNECT_URL = 'https://app.yoursaas.com/connect'
 
-/**
- * Pricing tiers displayed when the user has not yet connected.
- * These are static for now — Phase 3's SaaS gateway could serve
- * them dynamically in the future.
- */
-const PRICING_TIERS: PricingTier[] = [
-  {
-    name: 'Free',
-    price: '$0/mo',
-    features: [
-      '100 WebSocket events/mo',
-      '10 push notifications/mo',
-      'Community support',
-      '1 project',
-    ],
-  },
-  {
-    name: 'Starter',
-    price: '$9/mo',
-    features: [
-      '10,000 WebSocket events/mo',
-      '1,000 push notifications/mo',
-      'Email support',
-      '1 project',
-    ],
-  },
-  {
-    name: 'Growth',
-    price: '$29/mo',
-    features: [
-      '100,000 WebSocket events/mo',
-      '10,000 push notifications/mo',
-      'Priority support',
-      'Unlimited projects',
-      'Custom event channels',
-    ],
-    recommended: true,
-  },
-]
 
 interface DisconnectedViewProps {
   /** Override for the SaaS connection URL (from plugin options). */
@@ -63,6 +24,24 @@ interface DisconnectedViewProps {
  */
 export function DisconnectedView({ saasConnectUrl }: DisconnectedViewProps) {
   const [selectedTier, setSelectedTier] = React.useState<string>('Free')
+  const [pricingTiers, setPricingTiers] = React.useState<PricingTier[]>([])
+  const [isLoadingTiers, setIsLoadingTiers] = React.useState(true)
+
+  React.useEffect(() => {
+    // TODO: Replace this with a real API fetch to the SaaS portal once it's deployed.
+    // e.g., fetch('https://api.yoursaas.com/v1/pricing').then(res => res.json())
+    import('./pricing.json')
+      .then((mod) => {
+        setPricingTiers(mod.default as PricingTier[])
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[notifications] Failed to load pricing tiers:', err)
+      })
+      .finally(() => {
+        setIsLoadingTiers(false)
+      })
+  }, [])
 
   const handleConnect = () => {
     const connectBase = saasConnectUrl ?? DEFAULT_SAAS_CONNECT_URL
@@ -83,8 +62,13 @@ export function DisconnectedView({ saasConnectUrl }: DisconnectedViewProps) {
       </div>
 
       <div className={styles.pricingGrid}>
-        {PRICING_TIERS.map((tier) => {
-          const isSelected = selectedTier === tier.name
+        {isLoadingTiers ? (
+          <p style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#6b7280', padding: '2rem' }}>
+            Loading subscription tiers...
+          </p>
+        ) : (
+          pricingTiers.map((tier) => {
+            const isSelected = selectedTier === tier.name
 
           return (
             <div
@@ -136,7 +120,8 @@ export function DisconnectedView({ saasConnectUrl }: DisconnectedViewProps) {
               </ul>
             </div>
           )
-        })}
+        })
+      )}
       </div>
 
       <button
