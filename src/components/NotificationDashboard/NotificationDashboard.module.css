@@ -1,0 +1,406 @@
+/* ==========================================================================
+   NotificationDashboard — CSS Module
+   Scoped styles for the embedded SaaS dashboard.
+   Follows Payload's admin design language (neutral palette, clean spacing).
+   ========================================================================== */
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+
+.dashboard {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  font-family: var(--font-body, system-ui, -apple-system, sans-serif);
+}
+
+.loadingContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--theme-elevation-500, #999);
+  font-size: 0.875rem;
+}
+
+/* ── Disconnected View ──────────────────────────────────────────────────── */
+
+.disconnected {
+  text-align: center;
+}
+
+.disconnectedHeader {
+  margin-bottom: 2rem;
+}
+
+.disconnectedTitle {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--theme-elevation-1000, #1a1a1a);
+}
+
+.disconnectedDescription {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--theme-elevation-600, #666);
+  line-height: 1.5;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ── Pricing Grid ───────────────────────────────────────────────────────── */
+
+.pricingGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.pricingCard {
+  position: relative;
+  background: var(--theme-elevation-50, #fafafa);
+  border: 1px solid var(--theme-elevation-150, #e0e0e0);
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pricingCard:hover {
+  border-color: var(--theme-elevation-300, #ccc);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.pricingCard--recommended {
+  border-color: var(--theme-success-500, #28a745);
+  background: var(--theme-success-50, #f0fdf4);
+}
+
+.pricingBadge {
+  position: absolute;
+  top: -0.625rem;
+  right: 1rem;
+  background: var(--theme-success-500, #28a745);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pricingName {
+  margin: 0 0 0.25rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--theme-elevation-1000, #1a1a1a);
+}
+
+.pricingPrice {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--theme-elevation-800, #333);
+}
+
+.pricingFeatures {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pricingFeature {
+  position: relative;
+  padding-left: 1.25rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--theme-elevation-700, #555);
+  line-height: 1.4;
+}
+
+.pricingFeature::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--theme-success-500, #28a745);
+  font-weight: 600;
+}
+
+/* ── Connect Button ─────────────────────────────────────────────────────── */
+
+.connectButton {
+  display: inline-block;
+  padding: 0.75rem 2rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--theme-success-500, #28a745);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.connectButton:hover {
+  background: var(--theme-success-600, #218838);
+  transform: translateY(-1px);
+}
+
+.connectButton:active {
+  transform: translateY(0);
+}
+
+.disconnectedFooter {
+  margin-top: 1.5rem;
+  font-size: 0.8125rem;
+  color: var(--theme-elevation-500, #999);
+}
+
+/* ── Connected View ─────────────────────────────────────────────────────── */
+
+.connected {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.connectedHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.connectedTitle {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--theme-elevation-1000, #1a1a1a);
+}
+
+.connectedMeta {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--theme-elevation-500, #999);
+}
+
+.connectedMeta code {
+  background: var(--theme-elevation-100, #f0f0f0);
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--theme-success-500, #28a745);
+  background: var(--theme-success-50, #f0fdf4);
+  border: 1px solid var(--theme-success-200, #a3e0b0);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* ── Usage Section ──────────────────────────────────────────────────────── */
+
+.usageSection {
+  background: var(--theme-elevation-50, #fafafa);
+  border: 1px solid var(--theme-elevation-150, #e0e0e0);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.usageSectionTitle {
+  margin: 0 0 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--theme-elevation-800, #333);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.planBadge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  background: var(--theme-elevation-200, #e0e0e0);
+  color: var(--theme-elevation-700, #555);
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.usageBars {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.loadingText {
+  font-size: 0.8125rem;
+  color: var(--theme-elevation-500, #999);
+  margin: 0;
+}
+
+/* ── Usage Bar ──────────────────────────────────────────────────────────── */
+
+.usageBarContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.usageBarHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.usageBarLabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--theme-elevation-700, #555);
+}
+
+.usageBarCount {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--theme-elevation-600, #666);
+  font-variant-numeric: tabular-nums;
+}
+
+.usageBarTrack {
+  height: 8px;
+  background: var(--theme-elevation-150, #e0e0e0);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.usageBarFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.usageBarFill--green {
+  background: var(--theme-success-500, #28a745);
+}
+
+.usageBarFill--amber {
+  background: var(--theme-warning-500, #f0ad4e);
+}
+
+.usageBarFill--red {
+  background: var(--theme-error-500, #dc3545);
+}
+
+.usageBarPercentage {
+  font-size: 0.6875rem;
+  color: var(--theme-elevation-500, #999);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Error Banner ───────────────────────────────────────────────────────── */
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--theme-error-50, #fef2f2);
+  border: 1px solid var(--theme-error-200, #fca5a5);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  color: var(--theme-error-700, #b91c1c);
+}
+
+.errorBanner p {
+  margin: 0;
+}
+
+.retryButton {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--theme-error-700, #b91c1c);
+  background: transparent;
+  border: 1px solid var(--theme-error-300, #f87171);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.retryButton:hover {
+  background: var(--theme-error-100, #fee2e2);
+}
+
+/* ── Handshake Banner ───────────────────────────────────────────────────── */
+
+.handshakeBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--theme-elevation-100, #f0f0f0);
+  border: 1px solid var(--theme-elevation-200, #e0e0e0);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  color: var(--theme-elevation-700, #555);
+}
+
+/* ── Action Buttons ─────────────────────────────────────────────────────── */
+
+.connectedActions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.billingButton {
+  padding: 0.625rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--theme-elevation-800, #333);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.billingButton:hover:not(:disabled) {
+  background: var(--theme-elevation-900, #1a1a1a);
+}
+
+.billingButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.disconnectButton {
+  padding: 0.625rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--theme-error-600, #dc2626);
+  background: transparent;
+  border: 1px solid var(--theme-error-300, #f87171);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.disconnectButton:hover {
+  background: var(--theme-error-50, #fef2f2);
+}

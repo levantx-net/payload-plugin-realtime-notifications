@@ -26,16 +26,16 @@ export const NotificationSettings: GlobalConfig = {
   // ------------------------------------------------------------------
   admin: {
     group: 'Plugins',
-    // Phase 2 will override the default view with a custom dashboard:
-    // components: {
-    //   views: {
-    //     edit: {
-    //       default: {
-    //         Component: 'payload-plugin-realtime-notifications/client#NotificationDashboard',
-    //       },
-    //     },
-    //   },
-    // },
+    components: {
+      views: {
+        edit: {
+          default: {
+            Component:
+              'payload-plugin-realtime-notifications/client#NotificationDashboard',
+          },
+        },
+      },
+    },
   },
 
   // ------------------------------------------------------------------

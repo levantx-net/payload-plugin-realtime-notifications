@@ -132,3 +132,57 @@ export interface DispatchTarget {
   /** HTTP headers (e.g. `Authorization: Bearer <key>`). */
   headers: Record<string, string>
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Dashboard Types
+// ---------------------------------------------------------------------------
+
+/**
+ * Response shape from `GET {saasGatewayUrl}/tenant/usage`.
+ * Represents the current billing period's usage counters.
+ */
+export interface UsageData {
+  /** Plan name, e.g. "Starter", "Growth". */
+  plan: string
+
+  /** Number of WebSocket events dispatched this billing period. */
+  websocketCount: number
+
+  /** Maximum WebSocket events allowed by the current plan. */
+  websocketLimit: number
+
+  /** Number of push notifications sent this billing period. */
+  pushCount: number
+
+  /** Maximum push notifications allowed by the current plan. */
+  pushLimit: number
+}
+
+/**
+ * Display data for a pricing tier card in the DisconnectedView.
+ */
+export interface PricingTier {
+  /** Tier name, e.g. "Starter", "Growth". */
+  name: string
+
+  /** Monthly price string, e.g. "$9/mo". */
+  price: string
+
+  /** Feature bullet points. */
+  features: string[]
+
+  /** Whether this tier is visually highlighted as recommended. */
+  recommended?: boolean
+}
+
+/**
+ * The query parameters appended to the callback URL after a
+ * successful OAuth handshake with the SaaS gateway.
+ *
+ * @internal
+ */
+export interface HandshakeParams {
+  saas_api_key: string
+  tenant_id: string
+}
+
