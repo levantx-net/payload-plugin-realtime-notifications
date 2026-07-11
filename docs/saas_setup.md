@@ -176,3 +176,82 @@ When the developer installs your plugin, here is exactly how your SaaS portal in
    - The plugin's `useHandshake` React hook intercepts the URL, executes `replaceState` to hide the parameters immediately, and submits a `PATCH /api/globals/notification-settings` internally to the local Payload server database.
 5. **Polled Verification:**
    - The dashboard re-fetches configuration settings and now displays the subscription statistics (usage progress meters) fetched from your gateway's `/v1/tenant/usage` API.
+
+---
+
+## 5. Deploying the SaaS Infrastructure on Dokploy
+
+[Dokploy](https://dokploy.com/) is a powerful open-source PaaS that simplifies deploying Docker containers, databases, and applications. Here is how to deploy the real-time notifications infrastructure on a single Dokploy server.
+
+### 1. Provision the Databases
+In your Dokploy dashboard, navigate to **Databases** and create two services:
+* **PostgreSQL / MongoDB**: For storing accounts, tenant IDs, and hashed API keys. 
+* **Redis**: For tracking real-time usage and rate limits. 
+* *Note: Note down the internal network URLs provided by Dokploy (e.g., `redis://dokploy-redis:6379`).*
+
+### 2. Deploy the WebSocket Server (Sockudo)
+Sockudo (or Soketi) acts as your Pusher-compatible WebSocket cluster.
+1. Go to **Applications** -> **Create Application**.
+2. Set the Name to `websocket-cluster`.
+3. Set the Docker Image to `quay.io/soketi/soketi:1.6-16-alpine`.
+4. In the **Environment Variables**, define your master Pusher credentials:
+   ```env
+   SOKETI_DEBUG=1
+   SOKETI_DEFAULT_APP_ID=YOUR_APP_ID
+   SOKETI_DEFAULT_APP_KEY=YOUR_APP_KEY
+   SOKETI_DEFAULT_APP_SECRET=YOUR_APP_SECRET
+   ```
+5. In the **Domains** tab, attach a public domain (e.g., `ws.yoursaas.com`) with Let's Encrypt SSL enabled. Make sure the internal port is mapped to `6001`.
+
+### 3. Deploy the SaaS Gateway & Portal
+You can deploy your Next.js SaaS Web Portal and Gateway API as a single application or separate microservices.
+1. Create a new **Application** in Dokploy pointing to your SaaS Git repository.
+2. Under **Environment Variables**, connect it to your Dokploy databases and the WebSocket server:
+   ```env
+   DATABASE_URL=postgres://user:pass@dokploy-postgres:5432/db
+   REDIS_URL=redis://dokploy-redis:6379
+   STRIPE_SECRET_KEY=sk_live_...
+   PUSHER_APP_ID=YOUR_APP_ID
+   PUSHER_KEY=YOUR_APP_KEY
+   PUSHER_SECRET=YOUR_APP_SECRET
+   PUSHER_HOST=dokploy-websocket-cluster
+   PUSHER_PORT=6001
+   ```
+3. Attach your public domains (e.g., `app.yoursaas.com` and `api.yoursaas.com`) to the application and enable SSL.
+
+### 4. Connect the Plugin to your Dokploy Deployment
+Once the infrastructure is live, your users (or you) just need to override the default URLs when installing the plugin in their `payload.config.ts`:
+
+```typescript
+import { notificationsPlugin } from 'payload-plugin-realtime-notifications'
+
+export default buildConfig({
+  plugins: [
+    notificationsPlugin({
+      // Point the CMS backend to your Dokploy SaaS Gateway
+      saasGatewayUrl: 'https://api.yoursaas.com/v1',
+      collections: {
+        posts: true,
+      },
+    }),
+  ],
+})
+```
+
+And in their frontend Next.js/React app (`NotificationProvider`), point the WebSocket client to the Dokploy Sockudo instance:
+
+```tsx
+<NotificationProvider
+  config={{
+    appKey: 'YOUR_APP_KEY',          // Set in Step 2
+    wsHost: 'ws.yoursaas.com',       // Your Dokploy WS domain
+    wsPort: 80,
+    wssPort: 443,
+    forceTLS: true,
+    disableStats: true,              // Prevents pinging official Pusher stats
+    enabledTransports: ['ws', 'wss'],
+  }}
+>
+  <App />
+</NotificationProvider>
+```
