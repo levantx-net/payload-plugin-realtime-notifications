@@ -1,8 +1,9 @@
-import type { CollectionSlug, Config } from 'payload'
+import type { Config } from 'payload'
 
-import { dispatchEvent } from './dispatcher/dispatchEvent.js'
 import { NotificationSettings } from './globals/NotificationSettings.js'
-import type { PluginOptions } from './types.js'
+import { createAfterChangeHook } from './hooks/createAfterChangeHook.js'
+import { createAfterDeleteHook } from './hooks/createAfterDeleteHook.js'
+import type { CollectionHookConfig, PluginOptions } from './types.js'
 
 // ---------------------------------------------------------------------------
 // Re-exports — public API surface
@@ -10,13 +11,34 @@ import type { PluginOptions } from './types.js'
 
 export { dispatchEvent } from './dispatcher/dispatchEvent.js'
 export { resolveTarget } from './dispatcher/dispatchEvent.js'
+export { createAfterChangeHook } from './hooks/createAfterChangeHook.js'
+export { createAfterDeleteHook } from './hooks/createAfterDeleteHook.js'
 export type {
+  CollectionHookConfig,
+  CollectionHookEntry,
+  DataTransformArgs,
   DispatchTarget,
+  EventNameArgs,
+  HookConditionArgs,
+  HookFactoryOptions,
   NotificationEvent,
   NotificationMode,
   NotificationSettingsData,
   PluginOptions,
 } from './types.js'
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalizes a collection hook entry into a `CollectionHookConfig`.
+ * - `true` becomes `{}` (all defaults).
+ * - An object is passed through as-is.
+ */
+function normalizeHookEntry(entry: true | CollectionHookConfig): CollectionHookConfig {
+  return entry === true ? {} : entry
+}
 
 // ---------------------------------------------------------------------------
 // Plugin Factory
@@ -37,7 +59,13 @@ export type {
  * export default buildConfig({
  *   plugins: [
  *     notificationsPlugin({
- *       collections: { posts: true, orders: true },
+ *       collections: {
+ *         posts: true,
+ *         orders: {
+ *           events: ['create', 'update'],
+ *           condition: ({ doc }) => doc.status === 'paid',
+ *         },
+ *       },
  *     }),
  *   ],
  * })
@@ -78,53 +106,55 @@ export const notificationsPlugin =
       saasGatewayUrl: pluginOptions.saasGatewayUrl,
     }
 
-    // ── Collection hooks (Phase 3 will expand this) ───────────
+    // ── Collection hooks ──────────────────────────────────────
     if (pluginOptions.collections && config.collections) {
-      for (const slug of Object.keys(pluginOptions.collections)) {
+      for (const [slug, entry] of Object.entries(pluginOptions.collections)) {
+        if (!entry) continue
+
         const collection = config.collections.find((c) => c.slug === slug)
         if (!collection) continue
+
+        const hookConfig = normalizeHookEntry(entry)
 
         if (!collection.hooks) {
           collection.hooks = {}
         }
 
-        // -- afterChange hook --
-        if (!collection.hooks.afterChange) {
-          collection.hooks.afterChange = []
+        // -- afterChange hook (create + update) --
+        const shouldHookChange =
+          !hookConfig.events ||
+          hookConfig.events.includes('create') ||
+          hookConfig.events.includes('update')
+
+        if (shouldHookChange) {
+          if (!collection.hooks.afterChange) {
+            collection.hooks.afterChange = []
+          }
+          collection.hooks.afterChange.push(
+            createAfterChangeHook({
+              slug,
+              config: hookConfig,
+              saasGatewayUrl: pluginOptions.saasGatewayUrl,
+            }),
+          )
         }
-        collection.hooks.afterChange.push(({ doc, operation, req }) => {
-          const eventName = `${slug}.${operation === 'create' ? 'created' : 'updated'}`
-
-          dispatchEvent(req.payload, {
-            event: eventName,
-            collection: slug as CollectionSlug,
-            operation: operation as 'create' | 'update',
-            data: doc as Record<string, unknown>,
-          }, {
-            saasGatewayUrl: pluginOptions.saasGatewayUrl,
-          })
-
-          return doc
-        })
 
         // -- afterDelete hook --
-        if (!collection.hooks.afterDelete) {
-          collection.hooks.afterDelete = []
+        const shouldHookDelete =
+          !hookConfig.events || hookConfig.events.includes('delete')
+
+        if (shouldHookDelete) {
+          if (!collection.hooks.afterDelete) {
+            collection.hooks.afterDelete = []
+          }
+          collection.hooks.afterDelete.push(
+            createAfterDeleteHook({
+              slug,
+              config: hookConfig,
+              saasGatewayUrl: pluginOptions.saasGatewayUrl,
+            }),
+          )
         }
-        collection.hooks.afterDelete.push(({ doc, req }) => {
-          const eventName = `${slug}.deleted`
-
-          dispatchEvent(req.payload, {
-            event: eventName,
-            collection: slug as CollectionSlug,
-            operation: 'delete',
-            data: doc as Record<string, unknown>,
-          }, {
-            saasGatewayUrl: pluginOptions.saasGatewayUrl,
-          })
-
-          return doc
-        })
       }
     }
 

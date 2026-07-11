@@ -23,14 +23,23 @@ export type NotificationMode = 'saas' | 'self-hosted'
 export interface PluginOptions {
   /**
    * Collections that should have notification hooks attached.
-   * Map a collection slug to `true` to opt it in.
+   *
+   * - Pass `true` for default behaviour (all operations, no filtering).
+   * - Pass a `CollectionHookConfig` object for fine-grained control.
    *
    * @example
    * ```ts
-   * collections: { posts: true, orders: true }
+   * collections: {
+   *   posts: true,
+   *   orders: {
+   *     events: ['create', 'update'],
+   *     condition: ({ doc }) => doc.status === 'paid',
+   *     transform: ({ doc }) => ({ orderId: doc.id, total: doc.total }),
+   *   },
+   * }
    * ```
    */
-  collections?: Partial<Record<CollectionSlug, true>>
+  collections?: Partial<Record<CollectionSlug, CollectionHookEntry>>
 
   /**
    * Kill-switch. When `true` the plugin still injects its Global schema
@@ -184,5 +193,101 @@ export interface PricingTier {
 export interface HandshakeParams {
   saas_api_key: string
   tenant_id: string
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Generic Hook Types
+// ---------------------------------------------------------------------------
+
+/**
+ * Arguments passed to a hook condition predicate.
+ */
+export interface HookConditionArgs {
+  /** The document being created, updated, or deleted. */
+  doc: Record<string, unknown>
+  /** The operation that triggered the hook. */
+  operation: 'create' | 'update' | 'delete'
+  /** The collection slug. */
+  collection: string
+}
+
+/**
+ * Arguments passed to a data transform function.
+ */
+export interface DataTransformArgs {
+  /** The full document. */
+  doc: Record<string, unknown>
+  /** The operation that triggered the hook. */
+  operation: 'create' | 'update' | 'delete'
+  /** The collection slug. */
+  collection: string
+}
+
+/**
+ * Arguments passed to a custom event name function.
+ */
+export interface EventNameArgs {
+  /** The collection slug. */
+  collection: string
+  /** The operation that triggered the hook. */
+  operation: 'create' | 'update' | 'delete'
+}
+
+/**
+ * Rich per-collection configuration for notification hooks.
+ *
+ * All fields are optional — omitting a field uses the default behaviour.
+ */
+export interface CollectionHookConfig {
+  /**
+   * Which operations should trigger notifications.
+   * Defaults to all: `['create', 'update', 'delete']`.
+   */
+  events?: Array<'create' | 'update' | 'delete'>
+
+  /**
+   * Predicate function. Return `true` to dispatch, `false` to skip.
+   * Evaluated *before* the dispatch call.
+   *
+   * If the predicate throws, the event is silently skipped.
+   */
+  condition?: (args: HookConditionArgs) => boolean
+
+  /**
+   * Transform the document data before it is included in the
+   * notification event payload. Useful for stripping sensitive
+   * fields or reshaping the data.
+   *
+   * If the transformer throws, the full document is sent as fallback.
+   */
+  transform?: (args: DataTransformArgs) => Record<string, unknown>
+
+  /**
+   * Custom event name function. Overrides the default
+   * `{slug}.{created|updated|deleted}` pattern.
+   */
+  eventName?: (args: EventNameArgs) => string
+}
+
+/**
+ * Union type for per-collection hook configuration.
+ * - `true` — default behaviour (all operations, no filtering).
+ * - `CollectionHookConfig` — fine-grained control.
+ */
+export type CollectionHookEntry = true | CollectionHookConfig
+
+/**
+ * Options accepted by the hook factory functions.
+ * Used by `createAfterChangeHook` and `createAfterDeleteHook`.
+ */
+export interface HookFactoryOptions {
+  /** The collection slug this hook is attached to. */
+  slug: string
+
+  /** Per-collection hook configuration. Defaults to `{}` (all defaults). */
+  config?: CollectionHookConfig
+
+  /** Override for the SaaS gateway URL. */
+  saasGatewayUrl?: string
 }
 
