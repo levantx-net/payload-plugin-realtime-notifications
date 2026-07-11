@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import configPromise from '@payload-config'
 
 import { NotificationProvider } from 'payload-plugin-realtime-notifications/react'
+import type { NotificationClientConfig } from 'payload-plugin-realtime-notifications/react'
 
 export default async function FrontendLayout({ children }: { children: ReactNode }) {
   // Seamless Integration: Fetch the settings directly from the CMS database!
@@ -16,7 +17,7 @@ export default async function FrontendLayout({ children }: { children: ReactNode
     ? settings.soketiHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
     : 'localhost'
 
-  const clientConfig =
+  const clientConfig: NotificationClientConfig =
     settings.mode === 'self-hosted'
       ? {
           appKey: settings.soketiAppKey ?? 'app-key',

@@ -28,7 +28,9 @@ export default function LiveFeedPage() {
         audio.play().catch(() => {
           // Browsers block autoplay/audio until the user interacts with the page
           // eslint-disable-next-line no-console
-          console.warn('[notifications] Ringtone blocked. Click anywhere on the page first to allow audio.')
+          console.warn(
+            '[notifications] Ringtone blocked. Click anywhere on the page first to allow audio.',
+          )
         })
 
         // Show the toast notification
@@ -174,10 +176,20 @@ export default function LiveFeedPage() {
             maxWidth: '350px',
           }}
         >
-          <span style={{ fontSize: '1.5rem' }}>🔔</span>
+          <span style={{ fontSize: '1.5rem' }} role="img" aria-label="notification bell">
+            🔔
+          </span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>New Post Published!</div>
-            <div style={{ fontSize: '0.75rem', opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div
+              style={{
+                fontSize: '0.75rem',
+                opacity: 0.9,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
               {toast.title}
             </div>
           </div>
