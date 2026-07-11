@@ -228,7 +228,7 @@ function useLiveFeed() {
 
 ## Built-In API Endpoints
 
-The plugin automatically registers two helper endpoints under your Payload API prefix (usually `/api`):
+The plugin automatically registers five helper endpoints under your Payload API prefix (usually `/api`):
 
 ### 1. Active WebSocket Listener Count
 * **Route**: `GET /api/soketi/connections`
@@ -248,6 +248,51 @@ The plugin automatically registers two helper endpoints under your Payload API p
   * `message` (optional): The alert message to send. Defaults to `"Alert from client"`.
   * `collection` (optional): The channel name/collection to broadcast on. Defaults to `"posts"`.
 * **Description**: Receives an alert payload from your client application and broadcasts a custom `admin.alert` event directly to your configured Soketi (WebSockets) and Apprise (Slack, Discord, Email, etc.) dispatch endpoints.
+* **Response**:
+  ```json
+  {
+    "success": true
+  }
+  ```
+
+### 3. Channel Authentication (Private & Presence Channels)
+* **Route**: `POST /api/soketi/auth`
+* **Body Parameters (Form URL Encoded)**:
+  * `socket_id` (required): The client connection socket ID.
+  * `channel_name` (required): The channel name (must start with `private-` or `presence-`).
+* **Description**: Authenticates subscription requests for secure channels. Integrates with Payload's authentication. If the client is logged in, it signs the request using the client's User ID and User Info. It will automatically fall back to a guest identifier if the client is not authenticated.
+* **Response**:
+  ```json
+  {
+    "auth": "app-key:signature",
+    "channel_data": "{\"user_id\":\"123\",\"user_info\":{\"email\":\"user@example.com\"}}" // Only for presence channels
+  }
+  ```
+
+### 4. Active Channels List
+* **Route**: `GET /api/soketi/channels`
+* **Query Parameters**:
+  * `filter_by_prefix` (optional): Filter the returned channels list by prefix (e.g. `presence-` to see only presence channels).
+* **Description**: Securely contacts the Soketi HTTP API and retrieves a list of all active WebSocket channels/rooms currently occupied on the server.
+* **Response**:
+  ```json
+  {
+    "channels": {
+      "presence-room-1": {
+        "user_count": 5
+      },
+      "private-chat-123": {
+        "user_count": 2
+      }
+    }
+  }
+  ```
+
+### 5. Soketi Webhook Receiver
+* **Route**: `POST /api/soketi/webhooks`
+* **Headers**:
+  * `X-Pusher-Signature` (required): Signed HMAC-SHA256 signature to verify that Soketi sent the request.
+* **Description**: Receives asynchronous webhooks from Soketi (like `channel_occupied`, `channel_vacated`, `member_added`, `member_removed`). This can be configured in your Soketi dashboard/config to run automated database cleanups or update user presence statuses in real-time.
 * **Response**:
   ```json
   {

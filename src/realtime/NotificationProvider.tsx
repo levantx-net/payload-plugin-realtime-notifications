@@ -122,6 +122,7 @@ export function NotificationProvider({ config, children }: NotificationProviderP
         forceTLS: config.forceTLS ?? true,
         enabledTransports: config.enabledTransports ?? ['ws', 'wss'],
         disableStats: config.disableStats ?? false,
+        ...(config.authEndpoint ? { authEndpoint: config.authEndpoint } : {}),
         // Pusher logging
         ...(config.enableLogging ? { enableLogging: true } : {}),
       })

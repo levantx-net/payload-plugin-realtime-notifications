@@ -198,6 +198,170 @@ export const notificationsPlugin =
             return Response.json({ count: 1 }) // Fallback mock
           }
         },
+      },
+      {
+        path: '/soketi/auth',
+        method: 'post',
+        handler: async (req) => {
+          try {
+            const settings = (await req.payload.findGlobal({
+              slug: 'notification-settings',
+            })) as any
+
+            if (settings.mode !== 'self-hosted' || !settings.soketiAppSecret) {
+              return new Response('Unauthorized', { status: 403 })
+            }
+
+            const text = await req.text()
+            const params = new URLSearchParams(text)
+            const socketId = params.get('socket_id')
+            const channelName = params.get('channel_name')
+
+            if (!socketId || !channelName) {
+              return new Response('Bad request', { status: 400 })
+            }
+
+            // Simple user extraction (fallback to anonymous ID if not logged in)
+            const user = (req as any).user
+            const userId = user?.id || `anon_${Math.floor(Math.random() * 10000)}`
+            const userInfo = user ? { email: user.email } : { email: 'anonymous@guest.com' }
+
+            let stringToSign = `${socketId}:${channelName}`
+            let channelDataStr = ''
+
+            // Presence channels require user information in the signature
+            if (channelName.startsWith('presence-')) {
+              const channelData = { user_id: String(userId), user_info: userInfo }
+              channelDataStr = JSON.stringify(channelData)
+              stringToSign += `:${channelDataStr}`
+            }
+
+            const crypto = await import('crypto')
+            const signature = crypto.default
+              .createHmac('sha256', settings.soketiAppSecret)
+              .update(stringToSign)
+              .digest('hex')
+
+            const authResponse: any = {
+              auth: `${settings.soketiAppKey}:${signature}`,
+            }
+
+            if (channelDataStr) {
+              authResponse.channel_data = channelDataStr
+            }
+
+            return Response.json(authResponse)
+          } catch (e) {
+            req.payload.logger.error('Soketi Auth Error: ' + e)
+            return new Response('Server Error', { status: 500 })
+          }
+        },
+      },
+      {
+        path: '/soketi/channels',
+        method: 'get',
+        handler: async (req) => {
+          try {
+            const settings = (await req.payload.findGlobal({
+              slug: 'notification-settings',
+            })) as any
+
+            if (settings.mode !== 'self-hosted' || !settings.soketiHost) {
+              return Response.json({ channels: {} })
+            }
+
+            const searchParams = new URL(req.url).searchParams
+            const prefix = searchParams.get('filter_by_prefix')
+
+            const host = settings.soketiHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+            let protocol = settings.soketiHost.startsWith('https') ? 'https' : 'http'
+            if (settings.soketiPort === 443) protocol = 'https'
+
+            const port = settings.soketiPort ? `:${settings.soketiPort}` : ''
+            const path = `/apps/${settings.soketiAppId}/channels`
+
+            const authTimestamp = Math.floor(Date.now() / 1000).toString()
+            const queryParams: any = {
+              auth_key: settings.soketiAppKey,
+              auth_timestamp: authTimestamp,
+              auth_version: '1.0',
+            }
+
+            if (prefix) {
+              queryParams.filter_by_prefix = prefix
+            }
+
+            const sortedKeys = Object.keys(queryParams).sort()
+            const queryString = sortedKeys.map((key) => `${key}=${queryParams[key]}`).join('&')
+
+            const signString = `GET\n${path}\n${queryString}`
+            const crypto = await import('crypto')
+            const signature = crypto.default
+              .createHmac('sha256', settings.soketiAppSecret)
+              .update(signString)
+              .digest('hex')
+
+            const url = `${protocol}://${host}${port}${path}?${queryString}&auth_signature=${signature}`
+
+            const res = await fetch(url)
+            if (!res.ok) {
+              const errBody = await res.text()
+              throw new Error(`Soketi API returned status ${res.status}: ${errBody}`)
+            }
+
+            const data = await res.json()
+            return Response.json(data)
+          } catch (e: any) {
+            req.payload.logger.error('Error fetching Soketi channels: ' + e)
+            return Response.json({ channels: {} })
+          }
+        },
+      },
+      {
+        path: '/soketi/webhooks',
+        method: 'post',
+        handler: async (req) => {
+          try {
+            const settings = (await req.payload.findGlobal({
+              slug: 'notification-settings',
+            })) as any
+
+            if (settings.mode !== 'self-hosted' || !settings.soketiAppSecret) {
+              return new Response('Not configured', { status: 400 })
+            }
+
+            const rawBody = await req.text()
+            const signatureHeader = req.headers.get('x-pusher-signature')
+
+            if (!signatureHeader) {
+              return new Response('Missing signature', { status: 401 })
+            }
+
+            const crypto = await import('crypto')
+            const expectedSignature = crypto.default
+              .createHmac('sha256', settings.soketiAppSecret)
+              .update(rawBody)
+              .digest('hex')
+
+            if (signatureHeader !== expectedSignature) {
+              return new Response('Invalid signature', { status: 401 })
+            }
+
+            const payload = JSON.parse(rawBody)
+
+            for (const event of payload.events) {
+              req.payload.logger.info(
+                `[notifications] Webhook Event: ${event.name} on ${event.channel}`,
+              )
+              // This is where users can add custom logic to update online status or clear rooms
+            }
+
+            return Response.json({ success: true })
+          } catch (e) {
+            req.payload.logger.error('Webhook processing error: ' + e)
+            return new Response('Server Error', { status: 500 })
+          }
+        },
       }
     )
 

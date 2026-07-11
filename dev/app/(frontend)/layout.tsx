@@ -26,6 +26,7 @@ export default async function FrontendLayout({ children }: { children: ReactNode
           forceTLS: true, // Set based on your Soketi deployment
           disableStats: true,
           enabledTransports: ['ws', 'wss'],
+          authEndpoint: '/api/soketi/auth',
         }
       : {
           appKey: 'saas-placeholder-key', // Will be provided by SaaS Gateway later

@@ -70,6 +70,12 @@ export interface NotificationClientConfig {
    * @default false
    */
   enableLogging?: boolean
+
+  /**
+   * Endpoint for authenticating private- and presence- channels.
+   * Example: '/api/soketi/auth'
+   */
+  authEndpoint?: string
 }
 
 /**
