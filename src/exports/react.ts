@@ -7,6 +7,10 @@
 export { NotificationProvider } from '../realtime/NotificationProvider.js'
 export { useConnectionStatus } from '../realtime/useConnectionStatus.js'
 export { useNotifications } from '../realtime/useNotifications.js'
+export { usePresence } from '../realtime/usePresence.js'
+export { useTypingIndicator } from '../realtime/useTypingIndicator.js'
+export { LiveIndicator } from '../realtime/LiveIndicator.js'
+
 export type {
   ConnectionStatus,
   NotificationClientConfig,

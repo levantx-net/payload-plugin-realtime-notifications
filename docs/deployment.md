@@ -79,6 +79,9 @@ services:
       - SOKETI_DEFAULT_APP_ID=app-id
       - SOKETI_DEFAULT_APP_KEY=app-key
       - SOKETI_DEFAULT_APP_SECRET=app-secret
+      # Webhooks configuration: Forwards vacate/disconnect events back to Payload CMS
+      - SOKETI_WEBHOOKS_0_URL=http://payload-cms:3000/api/soketi/webhooks
+      - SOKETI_WEBHOOKS_0_EVENTS=channel_occupied,channel_vacated,member_added,member_removed
     restart: unless-stopped
 
   # Apprise: Handles physical notifications (Email, Discord, Slack, SMS)

@@ -133,3 +133,32 @@ To guarantee that the frontend bundles contain zero Payload server dependencies 
 }
 ```
 This forces compilation loaders to only tree-shake and bundle `react` and `pusher-js` client code.
+
+---
+
+## 5. Real-Time SDK & Developer Experience Extensions
+
+To enable rapid building of collaborative real-time apps, the plugin includes advanced client-side utilities and server-side tracking:
+
+```mermaid
+graph TD
+    subgraph Client ["Client Library (/react)"]
+        H1["useNotifications"] -->|"General events"| WS["WebSocket Connection"]
+        H2["usePresence"] -->|"Online user state"| WS
+        H3["useTypingIndicator"] -->|"Low-latency client-typing"| WS
+        C1["LiveIndicator"] -->|"Visual network health"| WS
+    end
+
+    subgraph Server ["Payload Server"]
+        WH["Webhook API /soketi/webhooks"] -->|"HMAC-SHA256 Signed Event"| WH
+        WH -->|"Persist log"| DB[("RealtimeLogs Collection (Read-Only DB)")]
+        AT["AdminLiveToast"] -->|"Admin view background listener"| WS
+    end
+```
+
+### Key Extended Components:
+1. **`usePresence(channelName)`**: Subscribes to a Pusher Presence Channel (prefixed with `presence-`). It monitors `pusher:subscription_succeeded`, `pusher:member_added`, and `pusher:member_removed` events, maintaining a synchronized dictionary of active user IDs and metadata in React state.
+2. **`useTypingIndicator(channel, localIdentifier)`**: Emits `client-typing` events directly through the WebSocket client to bypass database writes. It automatically throttles outgoing broadcasts (maximum 1 per second) and cleans up stale indicators via a 1.5s interval sweep.
+3. **`RealtimeLogs` Collection**: A read-only Payload database collection that acts as a secure, permanent audit log of all channel traffic, occupied status, and client disconnects received from the verified webhook API.
+4. **`LiveIndicator` & `AdminLiveToast`**: Instant UI helpers. `LiveIndicator` binds to connection state changes to render a glowing status dot. `AdminLiveToast` plugs into the Payload Admin UI sidebar to alert logged-in users of high-priority system alerts in real-time.
+

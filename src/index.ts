@@ -1,6 +1,7 @@
 import type { Config } from 'payload'
 
 import { NotificationSettings } from './globals/NotificationSettings.js'
+import { RealtimeLogs } from './collections/RealtimeLogs.js'
 import { createAfterChangeHook } from './hooks/createAfterChangeHook.js'
 import { createAfterDeleteHook } from './hooks/createAfterDeleteHook.js'
 import type { CollectionHookConfig, PluginOptions } from './types.js'
@@ -83,6 +84,12 @@ export const notificationsPlugin =
     // Always inject — even when disabled — so the DB schema stays
     // consistent for migrations.
     config.globals.push(NotificationSettings)
+
+    // ── Inject the Realtime Logs Collection ───────────────────
+    if (!config.collections) {
+      config.collections = []
+    }
+    config.collections.push(RealtimeLogs)
 
     // ── Early exit if disabled ────────────────────────────────
     // Schema is already injected above, so the database remains
@@ -353,7 +360,18 @@ export const notificationsPlugin =
               req.payload.logger.info(
                 `[notifications] Webhook Event: ${event.name} on ${event.channel}`,
               )
-              // This is where users can add custom logic to update online status or clear rooms
+              
+              // Automatically write to the audit trail
+              await req.payload.create({
+                collection: 'realtime-logs',
+                data: {
+                  event: event.name,
+                  channel: event.channel,
+                  userId: event.user_id,
+                  socketId: event.socket_id,
+                  rawPayload: event,
+                },
+              })
             }
 
             return Response.json({ success: true })

@@ -193,28 +193,91 @@ export function LiveOrdersList() {
 }
 ```
 
-### 3. Implementing Graceful HTTP Fallbacks (SWR/React Query)
+### 3. Track Who is Online (`usePresence`)
+For tracking user connections in a lobby or room. Must be used on channels prefixed with `presence-`:
 
-If the client disconnects or fails to authenticate, you can fallback to HTTP polling transparently:
+```tsx
+import { usePresence } from 'payload-plugin-realtime-notifications/react'
 
-```typescript
-import useSWR from 'swr'
-import { useConnectionStatus, useNotifications } from 'payload-plugin-realtime-notifications/react'
+export function ActiveUsersList() {
+  const { members, count, myId } = usePresence('presence-chat-room')
 
-function useLiveFeed() {
-  const status = useConnectionStatus()
-  const { messages } = useNotifications({ channel: 'posts' })
-
-  // Only poll the database if WebSocket isn't actively connected
-  const { data: polledData } = useSWR(
-    status !== 'connected' ? '/api/posts' : null,
-    fetcher,
-    { refreshInterval: 5000 }
+  return (
+    <div>
+      <h4>Online Users ({count})</h4>
+      <ul>
+        {Object.entries(members).map(([userId, userInfo]) => (
+          <li key={userId} style={{ fontWeight: userId === myId ? 'bold' : 'normal' }}>
+            {userInfo.email} {userId === myId && '(You)'}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
-
-  return messages.length > 0 ? messages : (polledData || [])
 }
 ```
+
+### 4. Low-Latency Typing Indicators (`useTypingIndicator`)
+Send and receive "User is typing..." statuses directly between clients, bypassing database writes:
+
+```tsx
+import { useTypingIndicator } from 'payload-plugin-realtime-notifications/react'
+
+export function ChatInput({ currentUser }) {
+  const { isTyping, typingUsers, triggerTyping } = useTypingIndicator('presence-chat-room', currentUser.name)
+
+  return (
+    <div>
+      <input type="text" onChange={triggerTyping} placeholder="Type a message..." />
+      {isTyping && (
+        <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+          {Object.keys(typingUsers).join(', ')} {Object.keys(typingUsers).length === 1 ? 'is' : 'are'} typing...
+        </span>
+      )}
+    </div>
+  )
+}
+```
+
+### 5. UI Helpers: Glowing Live Indicator (`LiveIndicator`)
+Drop a glowing WebSocket health dot into your Navbar:
+
+```tsx
+import { LiveIndicator } from 'payload-plugin-realtime-notifications/react'
+
+export function Navbar() {
+  return (
+    <nav>
+      <span>MyApp</span>
+      <LiveIndicator label="WebSocket Connection Status" />
+    </nav>
+  )
+}
+```
+
+### 6. Admin Panel Global Toasts (`AdminLiveToast`)
+Register a background listener that pops up real-time toasts directly inside your Payload Admin UI. Import it and add it to your `admin.components.afterNav` in `payload.config.ts`:
+
+```typescript
+import { buildConfig } from 'payload'
+import { AdminLiveToast } from 'payload-plugin-realtime-notifications/client'
+
+export default buildConfig({
+  admin: {
+    components: {
+      afterNav: [AdminLiveToast],
+    },
+  },
+})
+```
+
+---
+
+## Webhook Audit Trail (Realtime Event Logs)
+
+The plugin automatically registers a read-only Payload database collection called `Realtime Logs` (`realtime-logs`).
+
+Whenever Soketi dispatches a webhook event to `/api/soketi/webhooks` (like connection failures, user disconnects, or vacated rooms), the plugin verifies the cryptographical `X-Pusher-Signature` header, parses the raw data, and writes the event history directly to your Payload database. This provides administrators with a secure, permanent audit log of all WebSocket traffic.
 
 ---
 
