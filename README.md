@@ -1,218 +1,221 @@
-# Payload Plugin Template
+# Payload CMS Real-Time Notifications Plugin
 
-A template repo to create a [Payload CMS](https://payloadcms.com) plugin.
+[![npm version](https://img.shields.io/npm/v/payload-plugin-realtime-notifications.svg)](https://www.npmjs.com/package/payload-plugin-realtime-notifications)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Payload is built with a robust infrastructure intended to support Plugins with ease. This provides a simple, modular, and reusable way for developers to extend the core capabilities of Payload.
+A stateless, production-ready, zero-blocking real-time notification publisher plugin for **Payload CMS 3.x**. Easily dispatch real-time events to your clients via WebSockets when database records change, using either a managed SaaS gateway or a self-hosted Sockudo + Apprise stack.
 
-To build your own Payload plugin, all you need is:
+---
 
-- An understanding of the basic Payload concepts
-- And some JavaScript/Typescript experience
+## Features
 
-## Background
+- **Stateless Architecture:** Event publisher model. It doesn't manage connection sockets directly on the CMS, maintaining Payload server performance.
+- **Zero-Blocking Hooks:** All database hooks run asynchronously and are safely wrapped in try-catch handlers. Slow network responses from SaaS or self-hosted systems will *never* block Payload save/update operations.
+- **Managed & Self-Hosted Modes:** Connect directly to a managed SaaS platform via OAuth, or point to your own Sockudo (WebSocket) and Apprise instances.
+- **Fully Generic Hook Configuration:** Opt-in database collections with granular control over events, conditions, data transforms, and event naming.
+- **Next.js & React Frontend Integration:** A dedicated decoupled client path (`/react`) with standard React hooks to subscribe and listen to notification feeds from your frontend apps.
+- **Graceful Degradation:** Real-time connection status is fully observable on the client to allow seamless polling fallbacks (SWR/React Query) when offline.
 
-Here is a short recap on how to integrate plugins with Payload, to learn more visit the [plugin overview page](https://payloadcms.com/docs/plugins/overview).
+---
 
-### How to install a plugin
+## Installation
 
-To install any plugin, simply add it to your payload.config() in the Plugin array.
+Install the plugin along with `pusher-js` (required if using the frontend react client):
 
-```ts
-import myPlugin from 'my-plugin'
+```bash
+npm install payload-plugin-realtime-notifications pusher-js
+# or
+pnpm add payload-plugin-realtime-notifications pusher-js
+# or
+yarn add payload-plugin-realtime-notifications pusher-js
+```
 
-export const config = buildConfig({
+---
+
+## Server-Side Configuration
+
+Register the plugin inside your `payload.config.ts`:
+
+```typescript
+import { buildConfig } from 'payload'
+import { notificationsPlugin } from 'payload-plugin-realtime-notifications'
+
+export default buildConfig({
   plugins: [
-    // You can pass options to the plugin
-    myPlugin({
-      enabled: true,
+    notificationsPlugin({
+      collections: {
+        // Option 1: Simple configuration (listens to all events: create, update, delete)
+        posts: true,
+
+        // Option 2: Advanced configuration with filters, transforms, and custom event names
+        orders: {
+          events: ['create', 'update'], // Skip delete events
+          condition: ({ doc }) => doc.status === 'paid', // Only dispatch when paid
+          transform: ({ doc }) => ({
+            id: doc.id,
+            total: doc.total,
+            customerEmail: doc.customerEmail,
+          }), // Strip sensitive fields and dispatch a lighter object
+          eventName: ({ operation }) => `shop.order.${operation}`, // Override default names
+        },
+      },
+      // Optional: Override default SaaS gateway URL
+      saasGatewayUrl: 'https://api.yoursaas.com/v1',
     }),
   ],
 })
 ```
 
-### Initialization
+### Collection Hook Configuration Options
 
-The initialization process goes in the following order:
+If configuring a collection with an object instead of `true`, the following settings are available:
 
-1. Incoming config is validated
-2. **Plugins execute**
-3. Default options are integrated
-4. Sanitization cleans and validates data
-5. Final config gets initialized
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `events` | `Array<'create' \| 'update' \| 'delete'>` | Limit which operations trigger the hooks. Defaults to all three. |
+| `condition` | `(args: HookConditionArgs) => boolean` | Returning `false` or throwing an error cancels the dispatch before making network calls. |
+| `transform` | `(args: DataTransformArgs) => Record<string, any>` | Shape the webhook body. If it throws, fallback sends the full document. |
+| `eventName` | `(args: EventNameArgs) => string` | Custom event name overrides. Default is `{collectionSlug}.{created\|updated\|deleted}`. |
 
-## Building the Plugin
+---
 
-When you build a plugin, you are purely building a feature for your project and then abstracting it outside of the project.
+## Standalone Hook Factories
 
-### Template Files
+If you prefer not to use the automated collections wiring, you can import and attach the hook factories directly to any collection's array manually:
 
-In the Payload [plugin template](https://github.com/payloadcms/payload/tree/3.x/templates/plugin), you will see a common file structure that is used across all plugins:
+```typescript
+import { createAfterChangeHook, createAfterDeleteHook } from 'payload-plugin-realtime-notifications'
 
-1. root folder
-2. /src folder
-3. /dev folder
-
-#### Root
-
-In the root folder, you will see various files that relate to the configuration of the plugin. We set up our environment in a similar manner in Payload core and across other projects, so hopefully these will look familiar:
-
-- **README**.md\* - This contains instructions on how to use the template. When you are ready, update this to contain instructions on how to use your Plugin.
-- **package**.json\* - Contains necessary scripts and dependencies. Overwrite the metadata in this file to describe your Plugin.
-- .**eslint**.config.js - Eslint configuration for reporting on problematic patterns.
-- .**gitignore** - List specific untracked files to omit from Git.
-- .**prettierrc**.json - Configuration for Prettier code formatting.
-- **tsconfig**.json - Configures the compiler options for TypeScript
-- .**swcrc** - Configuration for SWC, a fast compiler that transpiles and bundles TypeScript.
-- **vitest**.config.js - Config file for Vitest, defining how tests are run and how modules are resolved
-
-**IMPORTANT\***: You will need to modify these files.
-
-#### Dev
-
-In the dev folder, you’ll find a basic payload project, created with `npx create-payload-app` and the blank template.
-
-**IMPORTANT**: Make a copy of the `.env.example` file and rename it to `.env`. Update the `DATABASE_URL` to match the database you are using and your plugin name. Update `PAYLOAD_SECRET` to a unique string.
-**You will not be able to run `pnpm/yarn dev` until you have created this `.env` file.**
-
-`myPlugin` has already been added to the `payload.config()` file in this project.
-
-```ts
-plugins: [
-  myPlugin({
-    collections: {
-      posts: true,
-    },
-  }),
-]
-```
-
-Later when you rename the plugin or add additional options, **make sure to update it here**.
-
-You may wish to add collections or expand the test project depending on the purpose of your plugin. Just make sure to keep this dev environment as simplified as possible - users should be able to install your plugin without additional configuration required.
-
-When you’re ready to start development, initiate the project with `pnpm/npm/yarn dev` and pull up [http://localhost:3000](http://localhost:3000) in your browser.
-
-#### Src
-
-Now that we have our environment setup and we have a dev project ready to - it’s time to build the plugin!
-
-**index.ts**
-
-The essence of a Payload plugin is simply to extend the payload config - and that is exactly what we are doing in this file.
-
-```ts
-export const myPlugin =
-  (pluginOptions: MyPluginConfig) =>
-  (config: Config): Config => {
-    // do cool stuff with the config here
-
-    return config
-  }
-```
-
-First, we receive the existing payload config along with any plugin options.
-
-From here, you can extend the config as you wish.
-
-Finally, you return the config and that is it!
-
-##### Spread Syntax
-
-Spread syntax (or the spread operator) is a feature in JavaScript that uses the dot notation **(...)** to spread elements from arrays, strings, or objects into various contexts.
-
-We are going to use spread syntax to allow us to add data to existing arrays without losing the existing data. It is crucial to spread the existing data correctly – else this can cause adverse behavior and conflicts with Payload config and other plugins.
-
-Let’s say you want to build a plugin that adds a new collection:
-
-```ts
-config.collections = [
-  ...(config.collections || []),
-  // Add additional collections here
-]
-```
-
-First we spread the `config.collections` to ensure that we don’t lose the existing collections, then you can add any additional collections just as you would in a regular payload config.
-
-This same logic is applied to other properties like admin, hooks, globals:
-
-```ts
-config.globals = [
-  ...(config.globals || []),
-  // Add additional globals here
-]
-
-config.hooks = {
-  ...(incomingConfig.hooks || {}),
-  // Add additional hooks here
+export const InvoicesCollection = {
+  slug: 'invoices',
+  hooks: {
+    afterChange: [
+      createAfterChangeHook({
+        slug: 'invoices',
+        config: {
+          condition: ({ doc }) => doc.amount > 1000,
+        },
+      }),
+    ],
+    afterDelete: [
+      createAfterDeleteHook({
+        slug: 'invoices',
+      }),
+    ],
+  },
+  fields: [],
 }
 ```
 
-Some properties will be slightly different to extend, for instance the onInit property:
+---
 
-```ts
-import { onInitExtension } from './onInitExtension' // example file
+## Admin Panel Settings & Subscription Flow
 
-config.onInit = async (payload) => {
-  if (incomingConfig.onInit) await incomingConfig.onInit(payload)
-  // Add additional onInit code by defining an onInitExtension function
-  onInitExtension(pluginOptions, payload)
+Upon registering the plugin, a new Global option titled **Notification Settings** appears in the sidebar under the `Plugins` group. 
+
+Overriding the default Global view, this plugin provides a custom dashboard:
+
+1. **Disconnected (Pricing Grid & Connection):**
+   When first visiting the view, you are presented with SaaS marketing pricing cards and a **Connect & Subscribe** button.
+2. **The OAuth Handshake:**
+   - Clicking **Connect & Subscribe** redirects you to the SaaS Portal to authorize your account and select a subscription plan.
+   - On completion, the gateway redirects back to your Payload admin dashboard passing temporary credentials.
+   - The React UI reads these parameters, posts them securely to the database using Payload REST API, and instantly purges the keys from the URL address bar using `window.history.replaceState` for security.
+3. **Connected (Usage & Billing):**
+   Once connected, the screen switches to render:
+   - Live monthly usage status (WebSocket counters and push notifications vs. current plan limits).
+   - A **Manage Billing** button redirecting the user to Stripe's Customer Portal.
+   - A **Disconnect Account** button to cleanly tear down authentication.
+
+---
+
+## Frontend Integration (Next.js / React Client)
+
+You can subscribe to and process live updates inside your web apps by importing from the separate export path `/react` containing no heavy Payload dependencies.
+
+### 1. Wrap Your App in the Provider
+
+```tsx
+import { NotificationProvider } from 'payload-plugin-realtime-notifications/react'
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <NotificationProvider
+      config={{
+        appKey: process.env.NEXT_PUBLIC_SAAS_API_KEY || 'your-app-key',
+        // Optional parameters for self-hosted Sockudo configurations:
+        // wsHost: 'ws.example.com',
+        // forceTLS: true,
+      }}
+    >
+      {children}
+    </NotificationProvider>
+  )
 }
 ```
 
-If you wish to add to the onInit, you must include the **async/await**. We don’t use spread syntax in this case, instead you must await the existing `onInit` before running additional functionality.
+### 2. Consume Notifications in Components
 
-In the template, we have stubbed out some addition `onInit` actions that seeds in a document to the `plugin-collection`, you can use this as a base point to add more actions - and if not needed, feel free to delete it.
+```tsx
+'use client'
 
-##### Types.ts
+import { useNotifications, useConnectionStatus } from 'payload-plugin-realtime-notifications/react'
 
-If your plugin has options, you should define and provide types for these options.
-
-```ts
-export type MyPluginConfig = {
-  /**
-   * List of collections to add a custom field
-   */
-  collections?: Partial<Record<CollectionSlug, true>>
-  /**
-   * Disable the plugin
-   */
-  disabled?: boolean
-}
-```
-
-If possible, include JSDoc comments to describe the options and their types. This allows a developer to see details about the options in their editor.
-
-##### Testing
-
-Having a test suite for your plugin is essential to ensure quality and stability. **Vitest** is a fast, modern testing framework that works seamlessly with Vite and supports TypeScript out of the box.
-
-Vitest organizes tests into test suites and cases, similar to other testing frameworks. We recommend creating individual tests based on the expected behavior of your plugin from start to finish.
-
-Writing tests with Vitest is very straightforward, and you can learn more about how it works in the [Vitest documentation.](https://vitest.dev/)
-
-For this template, we stubbed out `int.spec.ts` in the `dev` folder where you can write your tests.
-
-```ts
-describe('Plugin tests', () => {
-  // Create tests to ensure expected behavior from the plugin
-  it('some condition that must be met', () => {
-   // Write your test logic here
-   expect(...)
+export function LiveOrdersList() {
+  const status = useConnectionStatus() // 'connecting' | 'connected' | 'disconnected' | 'error'
+  const { messages, lastMessage, clearMessages } = useNotifications({
+    channel: 'orders',
+    events: ['shop.order.created'], // Listen for custom event name
   })
-})
+
+  return (
+    <div>
+      <div>Connection Status: {status === 'connected' ? '🟢 Live' : '🔴 Offline'}</div>
+
+      <ul>
+        {messages.map((msg, idx) => (
+          <li key={idx}>
+            Order #{msg.data.id} received. Total: {msg.data.total}
+          </li>
+        ))}
+      </ul>
+      <button onClick={clearMessages}>Clear</button>
+    </div>
+  )
+}
 ```
 
-## Best practices
+### 3. Implementing Graceful HTTP Fallbacks (SWR/React Query)
 
-With this tutorial and the plugin template, you should have everything you need to start building your own plugin.
-In addition to the setup, here are other best practices aim we follow:
+If the client disconnects or fails to authenticate, you can fallback to HTTP polling transparently:
 
-- **Providing an enable / disable option:** For a better user experience, provide a way to disable the plugin without uninstalling it. This is especially important if your plugin adds additional webpack aliases, this will allow you to still let the webpack run to prevent errors.
-- **Include tests in your GitHub CI workflow**: If you’ve configured tests for your package, integrate them into your workflow to run the tests each time you commit to the plugin repository. Learn more about [how to configure tests into your GitHub CI workflow.](https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs)
-- **Publish your finished plugin to NPM**: The best way to share and allow others to use your plugin once it is complete is to publish an NPM package. This process is straightforward and well documented, find out more [creating and publishing a NPM package here.](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/).
-- **Add payload-plugin topic tag**: Apply the tag **payload-plugin **to your GitHub repository. This will boost the visibility of your plugin and ensure it gets listed with [existing payload plugins](https://github.com/topics/payload-plugin).
-- **Use [Semantic Versioning](https://semver.org/) (SemVar)** - With the SemVar system you release version numbers that reflect the nature of changes (major, minor, patch). Ensure all major versions reference their Payload compatibility.
+```typescript
+import useSWR from 'swr'
+import { useConnectionStatus, useNotifications } from 'payload-plugin-realtime-notifications/react'
 
-# Questions
+function useLiveFeed() {
+  const status = useConnectionStatus()
+  const { messages } = useNotifications({ channel: 'posts' })
 
-Please contact [Payload](mailto:dev@payloadcms.com) with any questions about using this plugin template.
+  // Only poll the database if WebSocket isn't actively connected
+  const { data: polledData } = useSWR(
+    status !== 'connected' ? '/api/posts' : null,
+    fetcher,
+    { refreshInterval: 5000 }
+  )
+
+  return messages.length > 0 ? messages : (polledData || [])
+}
+```
+
+---
+
+## Security Best Practices
+
+- **Minimal Scope:** The SaaS credentials are only readable/writable by authenticated Payload administrators.
+- **Sanitized URL bar:** API keys passed back via oauth callback routes are scrubbed synchronously prior to background processing to prevent leaks.
+- **Decoupled Bundling:** Importing frontend components from `/react` guarantees that server-side database tools never leak to client code bundles.
+
+## License
+
+MIT © [LevantX](https://github.com/levantx-net)
