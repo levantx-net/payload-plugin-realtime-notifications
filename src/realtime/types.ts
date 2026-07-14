@@ -73,7 +73,7 @@ export interface NotificationClientConfig {
 
   /**
    * Endpoint for authenticating private- and presence- channels.
-   * Example: '/api/soketi/auth'
+   * Example: '/api/ws/auth'
    */
   authEndpoint?: string
 }

@@ -80,12 +80,12 @@ export interface NotificationSettingsData {
   /** Tenant identifier issued alongside the API key. */
   tenantId?: string
 
-  /** Base URL of the user's self-hosted Sockudo WebSocket server. */
-  soketiHost?: string
-  soketiPort?: number
-  soketiAppId?: string
-  soketiAppKey?: string
-  soketiAppSecret?: string
+  /** Base URL of the user's self-hosted WebSocket server (Sockudo, Soketi, etc.). */
+  wsHost?: string
+  wsPort?: number
+  wsAppId?: string
+  wsAppKey?: string
+  wsAppSecret?: string
 
   /** Base URL of the user's self-hosted Apprise notification server. */
   appriseUrl?: string

@@ -7,7 +7,7 @@ import type { DispatchTarget, NotificationEvent, NotificationSettingsData } from
 const DEFAULT_SAAS_GATEWAY_URL = 'https://api.yoursaas.com/v1'
 
 // ---------------------------------------------------------------------------
-// Signature Helper for Self-Hosted Soketi (Pusher HTTP API)
+// Signature Helper for Self-Hosted Pusher-Compatible WebSockets (Sockudo, Soketi, etc.)
 // ---------------------------------------------------------------------------
 
 function signPusherRequest({
@@ -84,19 +84,19 @@ export function resolveTargets(
     return targets
   }
 
-  // ---- Self-Hosted: Soketi/Sockudo ----
-  if (settings.soketiHost) {
+  // ---- Self-Hosted: Pusher-Compatible WebSockets (Sockudo, Soketi, etc.) ----
+  if (settings.wsHost) {
     if (
-      settings.soketiAppId &&
-      settings.soketiAppKey &&
-      settings.soketiAppSecret
+      settings.wsAppId &&
+      settings.wsAppKey &&
+      settings.wsAppSecret
     ) {
-      const rawHost = settings.soketiHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+      const rawHost = settings.wsHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
       const protocol =
-        settings.soketiHost.startsWith('https') || settings.soketiPort === 443 ? 'https' : 'http'
-      const port = settings.soketiPort ? `:${settings.soketiPort}` : ''
+        settings.wsHost.startsWith('https') || settings.wsPort === 443 ? 'https' : 'http'
+      const port = settings.wsPort ? `:${settings.wsPort}` : ''
 
-      const path = `/apps/${settings.soketiAppId}/events`
+      const path = `/apps/${settings.wsAppId}/events`
 
       // Pusher HTTP API requires stringified data
       const pusherBody = JSON.stringify({
@@ -109,8 +109,8 @@ export function resolveTargets(
       })
 
       const finalUrl = signPusherRequest({
-        appKey: settings.soketiAppKey,
-        appSecret: settings.soketiAppSecret,
+        appKey: settings.wsAppKey,
+        appSecret: settings.wsAppSecret,
         host: `${rawHost}${port}`,
         protocol,
         path,
@@ -128,7 +128,7 @@ export function resolveTargets(
       if (process.env.NODE_ENV === 'development') {
         // eslint-disable-next-line no-console
         console.warn(
-          '[notifications] Soketi is partially configured, but missing App ID, App Key, or App Secret. Skipping WebSocket dispatch.',
+          '[notifications] WebSocket server is partially configured, but missing App ID, App Key, or App Secret. Skipping WebSocket dispatch.',
         )
       }
     }

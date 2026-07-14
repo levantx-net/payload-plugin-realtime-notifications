@@ -118,6 +118,171 @@ export const notificationsPlugin =
       config.endpoints = []
     }
 
+    const handleGetConnections = async (req: any) => {
+      try {
+        const settings = (await req.payload.findGlobal({
+          slug: 'notification-settings',
+        })) as any
+
+        if (settings.mode !== 'self-hosted' || !settings.wsHost) {
+          return Response.json({ count: 1 }) // Fallback mock
+        }
+
+        const searchParams = new URL(req.url as string).searchParams
+        const channel = searchParams.get('channel') || 'posts'
+
+        const host = settings.wsHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+        let protocol = settings.wsHost.startsWith('https') ? 'https' : 'http'
+        if (settings.wsPort === 443) protocol = 'https'
+
+        const port = settings.wsPort ? `:${settings.wsPort}` : ''
+        const path = `/apps/${settings.wsAppId}/channels/${channel}`
+
+        const authTimestamp = Math.floor(Date.now() / 1000).toString()
+        const queryParams = {
+          auth_key: settings.wsAppKey,
+          auth_timestamp: authTimestamp,
+          auth_version: '1.0',
+          info: 'subscription_count',
+        }
+
+        const sortedKeys = Object.keys(queryParams).sort() as Array<keyof typeof queryParams>
+        const queryString = sortedKeys.map((key) => `${key}=${queryParams[key]}`).join('&')
+
+        const signString = `GET\n${path}\n${queryString}`
+        const crypto = await import('crypto')
+        const signature = crypto.default
+          .createHmac('sha256', settings.wsAppSecret)
+          .update(signString)
+          .digest('hex')
+
+        const url = `${protocol}://${host}${port}${path}?${queryString}&auth_signature=${signature}`
+
+        const res = await fetch(url)
+        if (!res.ok) {
+          const errBody = await res.text()
+          throw new Error(`WebSocket API returned status ${res.status}: ${errBody}`)
+        }
+
+        const data = (await res.json()) as { subscription_count?: number; occupied?: boolean }
+
+        return Response.json({ count: data.subscription_count ?? (data.occupied ? 1 : 0) })
+      } catch (e: any) {
+        req.payload.logger.error('Error fetching WebSocket connections: ' + e)
+        return Response.json({ count: 1 }) // Fallback mock
+      }
+    }
+
+    const handlePostAuth = async (req: any) => {
+      try {
+        const settings = (await req.payload.findGlobal({
+          slug: 'notification-settings',
+        })) as any
+
+        if (settings.mode !== 'self-hosted' || !settings.wsAppSecret) {
+          return new Response('Unauthorized', { status: 403 })
+        }
+
+        const text = (await req.text?.()) || ''
+        const params = new URLSearchParams(text)
+        const socketId = params.get('socket_id')
+        const channelName = params.get('channel_name')
+
+        if (!socketId || !channelName) {
+          return new Response('Bad request', { status: 400 })
+        }
+
+        const user = (req as any).user
+        const userId = user?.id || `anon_${Math.floor(Math.random() * 10000)}`
+        const userInfo = user ? { email: user.email } : { email: 'anonymous@guest.com' }
+
+        let stringToSign = `${socketId}:${channelName}`
+        let channelDataStr = ''
+
+        if (channelName.startsWith('presence-')) {
+          const channelData = { user_id: String(userId), user_info: userInfo }
+          channelDataStr = JSON.stringify(channelData)
+          stringToSign += `:${channelDataStr}`
+        }
+
+        const crypto = await import('crypto')
+        const signature = crypto.default
+          .createHmac('sha256', settings.wsAppSecret)
+          .update(stringToSign)
+          .digest('hex')
+
+        const authResponse: any = {
+          auth: `${settings.wsAppKey}:${signature}`,
+        }
+
+        if (channelDataStr) {
+          authResponse.channel_data = channelDataStr
+        }
+
+        return Response.json(authResponse)
+      } catch (e: any) {
+        req.payload.logger.error('WebSocket Auth Error: ' + e.toString())
+        return new Response('Server Error', { status: 500 })
+      }
+    }
+
+    const handleGetChannels = async (req: any) => {
+      try {
+        const settings = (await req.payload.findGlobal({
+          slug: 'notification-settings',
+        })) as any
+
+        if (settings.mode !== 'self-hosted' || !settings.wsHost) {
+          return Response.json({ channels: {} })
+        }
+
+        const searchParams = new URL(req.url as string).searchParams
+        const prefix = searchParams.get('filter_by_prefix')
+
+        const host = settings.wsHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+        let protocol = settings.wsHost.startsWith('https') ? 'https' : 'http'
+        if (settings.wsPort === 443) protocol = 'https'
+
+        const port = settings.wsPort ? `:${settings.wsPort}` : ''
+        const path = `/apps/${settings.wsAppId}/channels`
+
+        const authTimestamp = Math.floor(Date.now() / 1000).toString()
+        const queryParams: any = {
+          auth_key: settings.wsAppKey,
+          auth_timestamp: authTimestamp,
+          auth_version: '1.0',
+        }
+
+        if (prefix) {
+          queryParams.filter_by_prefix = prefix
+        }
+
+        const sortedKeys = Object.keys(queryParams).sort()
+        const queryString = sortedKeys.map((key) => `${key}=${queryParams[key]}`).join('&')
+
+        const signString = `GET\n${path}\n${queryString}`
+        const crypto = await import('crypto')
+        const signature = crypto.default
+          .createHmac('sha256', settings.wsAppSecret)
+          .update(signString)
+          .digest('hex')
+
+        const url = `${protocol}://${host}${port}${path}?${queryString}&auth_signature=${signature}`
+
+        const res = await fetch(url)
+        if (!res.ok) {
+          const errBody = await res.text()
+          throw new Error(`WebSocket API returned status ${res.status}: ${errBody}`)
+        }
+
+        const data = await res.json()
+        return Response.json(data)
+      } catch (e: any) {
+        req.payload.logger.error('Error fetching WebSocket channels: ' + e)
+        return Response.json({ channels: {} })
+      }
+    }
+
     config.endpoints.push(
       {
         path: '/admin-alert',
@@ -147,183 +312,37 @@ export const notificationsPlugin =
         },
       },
       {
+        path: '/ws/connections',
+        method: 'get',
+        handler: handleGetConnections,
+      },
+      {
         path: '/soketi/connections',
         method: 'get',
-        handler: async (req) => {
-          try {
-            const settings = (await req.payload.findGlobal({
-              slug: 'notification-settings',
-            })) as any
-
-            if (settings.mode !== 'self-hosted' || !settings.soketiHost) {
-              return Response.json({ count: 1 }) // Fallback mock
-            }
-
-            const searchParams = new URL(req.url as string).searchParams
-            const channel = searchParams.get('channel') || 'posts'
-
-            const host = settings.soketiHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
-            let protocol = settings.soketiHost.startsWith('https') ? 'https' : 'http'
-            if (settings.soketiPort === 443) protocol = 'https'
-
-            const port = settings.soketiPort ? `:${settings.soketiPort}` : ''
-            const path = `/apps/${settings.soketiAppId}/channels/${channel}`
-
-            const authTimestamp = Math.floor(Date.now() / 1000).toString()
-            const queryParams = {
-              auth_key: settings.soketiAppKey,
-              auth_timestamp: authTimestamp,
-              auth_version: '1.0',
-              info: 'subscription_count',
-            }
-
-            const sortedKeys = Object.keys(queryParams).sort() as Array<keyof typeof queryParams>
-            const queryString = sortedKeys.map((key) => `${key}=${queryParams[key]}`).join('&')
-
-            const signString = `GET\n${path}\n${queryString}`
-            const crypto = await import('crypto')
-            const signature = crypto.default
-              .createHmac('sha256', settings.soketiAppSecret)
-              .update(signString)
-              .digest('hex')
-
-            const url = `${protocol}://${host}${port}${path}?${queryString}&auth_signature=${signature}`
-
-            const res = await fetch(url)
-            if (!res.ok) {
-              const errBody = await res.text()
-              throw new Error(`Soketi API returned status ${res.status}: ${errBody}`)
-            }
-
-            const data = (await res.json()) as { subscription_count?: number; occupied?: boolean }
-
-            return Response.json({ count: data.subscription_count ?? (data.occupied ? 1 : 0) })
-          } catch (e: any) {
-            req.payload.logger.error('Error fetching Soketi connections: ' + e)
-            return Response.json({ count: 1 }) // Fallback mock
-          }
-        },
+        handler: handleGetConnections,
+      },
+      {
+        path: '/ws/auth',
+        method: 'post',
+        handler: handlePostAuth,
       },
       {
         path: '/soketi/auth',
         method: 'post',
-        handler: async (req) => {
-          try {
-            const settings = (await req.payload.findGlobal({
-              slug: 'notification-settings',
-            })) as any
-
-            if (settings.mode !== 'self-hosted' || !settings.soketiAppSecret) {
-              return new Response('Unauthorized', { status: 403 })
-            }
-
-            const text = (await req.text?.()) || ''
-            const params = new URLSearchParams(text)
-            const socketId = params.get('socket_id')
-            const channelName = params.get('channel_name')
-
-            if (!socketId || !channelName) {
-              return new Response('Bad request', { status: 400 })
-            }
-
-            // Simple user extraction (fallback to anonymous ID if not logged in)
-            const user = (req as any).user
-            const userId = user?.id || `anon_${Math.floor(Math.random() * 10000)}`
-            const userInfo = user ? { email: user.email } : { email: 'anonymous@guest.com' }
-
-            let stringToSign = `${socketId}:${channelName}`
-            let channelDataStr = ''
-
-            // Presence channels require user information in the signature
-            if (channelName.startsWith('presence-')) {
-              const channelData = { user_id: String(userId), user_info: userInfo }
-              channelDataStr = JSON.stringify(channelData)
-              stringToSign += `:${channelDataStr}`
-            }
-
-            const crypto = await import('crypto')
-            const signature = crypto.default
-              .createHmac('sha256', settings.soketiAppSecret)
-              .update(stringToSign)
-              .digest('hex')
-
-            const authResponse: any = {
-              auth: `${settings.soketiAppKey}:${signature}`,
-            }
-
-            if (channelDataStr) {
-              authResponse.channel_data = channelDataStr
-            }
-
-            return Response.json(authResponse)
-          } catch (e: any) {
-            req.payload.logger.error('Soketi Auth Error: ' + e.toString())
-            return new Response('Server Error', { status: 500 })
-          }
-        },
+        handler: handlePostAuth,
+      },
+      {
+        path: '/ws/channels',
+        method: 'get',
+        handler: handleGetChannels,
       },
       {
         path: '/soketi/channels',
         method: 'get',
-        handler: async (req) => {
-          try {
-            const settings = (await req.payload.findGlobal({
-              slug: 'notification-settings',
-            })) as any
-
-            if (settings.mode !== 'self-hosted' || !settings.soketiHost) {
-              return Response.json({ channels: {} })
-            }
-
-            const searchParams = new URL(req.url as string).searchParams
-            const prefix = searchParams.get('filter_by_prefix')
-
-            const host = settings.soketiHost.replace(/^https?:\/\//, '').replace(/\/+$/, '')
-            let protocol = settings.soketiHost.startsWith('https') ? 'https' : 'http'
-            if (settings.soketiPort === 443) protocol = 'https'
-
-            const port = settings.soketiPort ? `:${settings.soketiPort}` : ''
-            const path = `/apps/${settings.soketiAppId}/channels`
-
-            const authTimestamp = Math.floor(Date.now() / 1000).toString()
-            const queryParams: any = {
-              auth_key: settings.soketiAppKey,
-              auth_timestamp: authTimestamp,
-              auth_version: '1.0',
-            }
-
-            if (prefix) {
-              queryParams.filter_by_prefix = prefix
-            }
-
-            const sortedKeys = Object.keys(queryParams).sort()
-            const queryString = sortedKeys.map((key) => `${key}=${queryParams[key]}`).join('&')
-
-            const signString = `GET\n${path}\n${queryString}`
-            const crypto = await import('crypto')
-            const signature = crypto.default
-              .createHmac('sha256', settings.soketiAppSecret)
-              .update(signString)
-              .digest('hex')
-
-            const url = `${protocol}://${host}${port}${path}?${queryString}&auth_signature=${signature}`
-
-            const res = await fetch(url)
-            if (!res.ok) {
-              const errBody = await res.text()
-              throw new Error(`Soketi API returned status ${res.status}: ${errBody}`)
-            }
-
-            const data = await res.json()
-            return Response.json(data)
-          } catch (e: any) {
-            req.payload.logger.error('Error fetching Soketi channels: ' + e)
-            return Response.json({ channels: {} })
-          }
-        },
+        handler: handleGetChannels,
       },
       {
-        path: '/soketi/webhooks',
+        path: '/ws/webhooks',
         method: 'post',
         handler: async (req) => {
           try {
@@ -331,7 +350,7 @@ export const notificationsPlugin =
               slug: 'notification-settings',
             })) as any
 
-            if (settings.mode !== 'self-hosted' || !settings.soketiAppSecret) {
+            if (settings.mode !== 'self-hosted' || !settings.wsAppSecret) {
               return new Response('Not configured', { status: 400 })
             }
 
@@ -344,7 +363,7 @@ export const notificationsPlugin =
 
             const crypto = await import('crypto')
             const expectedSignature = crypto.default
-              .createHmac('sha256', settings.soketiAppSecret)
+              .createHmac('sha256', settings.wsAppSecret)
               .update(rawBody)
               .digest('hex')
 

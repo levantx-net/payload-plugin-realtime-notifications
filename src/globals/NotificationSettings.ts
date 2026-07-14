@@ -95,45 +95,45 @@ export const NotificationSettings: GlobalConfig = {
 
     // ---- Self-Hosted Fields (visible when mode = 'self-hosted') ----
     {
-      name: 'soketiHost',
+      name: 'wsHost',
       type: 'text',
-      label: 'Soketi WebSocket Host',
+      label: 'WebSocket Host',
       admin: {
         condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
-        description: 'The public domain or IP of your Soketi instance (e.g., asaas-soketi-xxx.sslip.io).',
+        description: 'The public domain or IP of your WebSocket server (e.g. Sockudo, Soketi, or custom server).',
       },
     },
     {
-      name: 'soketiPort',
+      name: 'wsPort',
       type: 'number',
-      label: 'Soketi Port',
+      label: 'WebSocket Port',
       defaultValue: 6001,
       admin: {
         condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
       },
     },
     {
-      name: 'soketiAppId',
+      name: 'wsAppId',
       type: 'text',
-      label: 'Soketi App ID',
+      label: 'WebSocket App ID',
       admin: {
         condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
-        description: 'Usually "app-id" by default unless changed in Soketi env vars.',
+        description: 'App ID configured on your WebSocket server (e.g. "app-id").',
       },
     },
     {
-      name: 'soketiAppKey',
+      name: 'wsAppKey',
       type: 'text',
-      label: 'Soketi App Key',
+      label: 'WebSocket App Key',
       admin: {
         condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
-        description: 'The public key used by your frontend React app (e.g., "app-key").',
+        description: 'The public key used by your frontend React app (e.g. "app-key").',
       },
     },
     {
-      name: 'soketiAppSecret',
+      name: 'wsAppSecret',
       type: 'text',
-      label: 'Soketi App Secret',
+      label: 'WebSocket App Secret',
       admin: {
         condition: (_data, siblingData) => siblingData?.mode === 'self-hosted',
         description: 'The private secret used by the CMS backend to authenticate dispatches. Keep this safe!',

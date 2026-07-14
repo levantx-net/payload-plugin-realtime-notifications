@@ -46,20 +46,20 @@ export default function LiveFeedPage() {
   useEffect(() => {
     const fetchStats = () => {
       // Fetch user count for 'posts'
-      fetch('/api/soketi/connections')
+      fetch('/api/ws/connections')
         .then((res) => (res.ok ? res.json() : Promise.reject(new Error('No live connections'))))
         .then((data) => setUserCount(data.count ?? 0))
         .catch((err) => console.log(err))
 
       // Fetch all active channels
-      fetch('/api/soketi/channels')
+      fetch('/api/ws/channels')
         .then((res) => (res.ok ? res.json() : Promise.reject(new Error('No live connections'))))
         .then((data) => setActiveChannels(data.channels ?? {}))
         .catch((err) => console.log(err))
     }
 
     if (status === 'connected') {
-      // Small delay to ensure the current tab's channel subscription registers on Soketi
+      // Small delay to ensure the current tab's channel subscription registers on the WebSocket server
       const delayTimeout = setTimeout(fetchStats, 500)
       const interval = setInterval(fetchStats, 5000)
 
@@ -175,7 +175,7 @@ export default function LiveFeedPage() {
             Active Channels Directory
           </h3>
           <p style={{ fontSize: '0.875rem', color: '#4b5563', marginBottom: '1rem' }}>
-            Powered by <code>/api/soketi/channels</code>
+            Powered by <code>/api/ws/channels</code>
           </p>
 
           {Object.keys(activeChannels).length === 0 ? (

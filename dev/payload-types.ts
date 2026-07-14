@@ -69,6 +69,7 @@ export interface Config {
   collections: {
     posts: Post;
     media: Media;
+    'realtime-logs': RealtimeLog;
     'payload-kv': PayloadKv;
     users: User;
     'payload-locked-documents': PayloadLockedDocument;
@@ -79,6 +80,7 @@ export interface Config {
   collectionsSelect: {
     posts: PostsSelect<false> | PostsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    'realtime-logs': RealtimeLogsSelect<false> | RealtimeLogsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -153,6 +155,33 @@ export interface Media {
   focalY?: number | null;
 }
 /**
+ * A read-only audit trail of historic WebSocket connection events and webhooks.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "realtime-logs".
+ */
+export interface RealtimeLog {
+  id: string;
+  event: string;
+  channel: string;
+  /**
+   * The ID of the user that triggered the event (if applicable).
+   */
+  userId?: string | null;
+  socketId?: string | null;
+  rawPayload?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -208,6 +237,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'media';
         value: string | Media;
+      } | null)
+    | ({
+        relationTo: 'realtime-logs';
+        value: string | RealtimeLog;
       } | null)
     | ({
         relationTo: 'users';
@@ -281,6 +314,19 @@ export interface MediaSelect<T extends boolean = true> {
   height?: T;
   focalX?: T;
   focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "realtime-logs_select".
+ */
+export interface RealtimeLogsSelect<T extends boolean = true> {
+  event?: T;
+  channel?: T;
+  userId?: T;
+  socketId?: T;
+  rawPayload?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -367,22 +413,22 @@ export interface NotificationSetting {
    */
   tenantId?: string | null;
   /**
-   * The public domain or IP of your Soketi instance (e.g., asaas-soketi-xxx.sslip.io).
+   * The public domain or IP of your WebSocket server (e.g. Sockudo, Soketi, or custom server).
    */
-  soketiHost?: string | null;
-  soketiPort?: number | null;
+  wsHost?: string | null;
+  wsPort?: number | null;
   /**
-   * Usually "app-id" by default unless changed in Soketi env vars.
+   * App ID configured on your WebSocket server (e.g. "app-id").
    */
-  soketiAppId?: string | null;
+  wsAppId?: string | null;
   /**
-   * The public key used by your frontend React app (e.g., "app-key").
+   * The public key used by your frontend React app (e.g. "app-key").
    */
-  soketiAppKey?: string | null;
+  wsAppKey?: string | null;
   /**
    * The private secret used by the CMS backend to authenticate dispatches. Keep this safe!
    */
-  soketiAppSecret?: string | null;
+  wsAppSecret?: string | null;
   /**
    * Base URL of your Apprise server (e.g. https://apprise.example.com).
    */
@@ -411,11 +457,11 @@ export interface NotificationSettingsSelect<T extends boolean = true> {
   mode?: T;
   saasApiKey?: T;
   tenantId?: T;
-  soketiHost?: T;
-  soketiPort?: T;
-  soketiAppId?: T;
-  soketiAppKey?: T;
-  soketiAppSecret?: T;
+  wsHost?: T;
+  wsPort?: T;
+  wsAppId?: T;
+  wsAppKey?: T;
+  wsAppSecret?: T;
   appriseUrl?: T;
   appriseConfigKey?: T;
   appriseBearerToken?: T;
